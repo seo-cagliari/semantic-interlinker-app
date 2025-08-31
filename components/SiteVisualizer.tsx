@@ -18,7 +18,7 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize useRef with null. The useRef hook requires an initial value.
+    // FIX: Initialize useRef with null to fix the "Expected 1 arguments, but got 0" error.
     const fgRef = useRef<ForceGraphMethods>(null);
     const [highlightedNode, setHighlightedNode] = useState<NodeObject | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
@@ -62,8 +62,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         links.forEach(link => {
             if (link.source === node.id || link.target === node.id) {
                 newHighlightLinks.add(link);
-                newHighlightNodes.add(link.source as NodeObject);
-                newHighlightNodes.add(link.target as NodeObject);
+                if (link.source) newHighlightNodes.add(link.source as NodeObject);
+                if (link.target) newHighlightNodes.add(link.target as NodeObject);
             }
         });
     
@@ -72,7 +72,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         setHighlightNodes(newHighlightNodes);
 
         if(fgRef.current){
-            fgRef.current.centerAt(node.x, node.y, 1000);
+            fgRef.current.centerAt(node.x!, node.y!, 1000);
             fgRef.current.zoom(2.5, 1000);
         }
 
