@@ -21,7 +21,7 @@ export const JsonModal: React.FC<JsonModalProps> = ({ isOpen, onClose, jsonStrin
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold">Suggestion JSON Data</h2>
+          <h2 className="text-lg font-semibold">Dati JSON del Suggerimento</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-800">
             <CloseIcon className="w-6 h-6" />
           </button>

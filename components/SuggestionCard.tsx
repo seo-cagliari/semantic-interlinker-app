@@ -13,8 +13,8 @@ interface SuggestionCardProps {
 const RiskCheckItem: React.FC<{ label: string; value: boolean }> = ({ label, value }) => (
   <div className="flex items-center gap-1">
     {value ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />}
-    <span>{label}</span>
-    <span className={`font-medium ${value ? 'text-green-600' : 'text-red-600'}`}>{String(value)}</span>
+    <span>{label}:</span>
+    <span className={`font-medium ${value ? 'text-green-600' : 'text-red-600'}`}>{value ? 'Sì' : 'No'}</span>
   </div>
 );
 
@@ -52,20 +52,20 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
           <h3 className="text-lg font-semibold text-slate-800 flex items-start gap-2">
             <LinkIcon className="w-5 h-5 mt-1 text-slate-400 shrink-0" />
             <span className="break-all">
-                <span className="font-normal text-slate-500">FROM:</span> {source_url}
+                <span className="font-normal text-slate-500">DA:</span> {source_url}
                 <br />
-                <span className="font-normal text-slate-500">TO:</span> {target_url}
+                <span className="font-normal text-slate-500">A:</span> {target_url}
             </span>
           </h3>
         </div>
-        <div className={`text-sm font-bold px-3 py-1 rounded-full ${scoreColorClass}`}>Score: {score.toFixed(2)}</div>
+        <div className={`text-sm font-bold px-3 py-1 rounded-full ${scoreColorClass}`}>Punteggio: {score.toFixed(2)}</div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm mb-4">
         <div className="space-y-3">
           <div className="flex items-start gap-2">
             <TagIcon className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
-            <div><b className="font-semibold">Anchor:</b> <span className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">{proposed_anchor}</span></div>
+            <div><b className="font-semibold">Anchor Text:</b> <span className="text-blue-600 bg-blue-50 px-1 py-0.5 rounded">{proposed_anchor}</span></div>
           </div>
           <div className="flex items-start gap-2">
             <TagIcon className="w-4 h-4 mt-0.5 text-slate-400 shrink-0 opacity-60" />
@@ -84,9 +84,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
 
       <div className="border-t border-slate-200 pt-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
-          <b>Risk checks:</b>
-          <RiskCheckItem label="Status" value={risk_checks.target_status === 200} />
-          <RiskCheckItem label="Indexable" value={risk_checks.target_indexable} />
+          <b>Controlli di rischio:</b>
+          <RiskCheckItem label="Stato" value={risk_checks.target_status === 200} />
+          <RiskCheckItem label="Indicizzabile" value={risk_checks.target_indexable} />
           <RiskCheckItem label="Canonical OK" value={risk_checks.canonical_ok} />
         </div>
         <div className="flex gap-2 w-full md:w-auto">

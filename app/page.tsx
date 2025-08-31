@@ -26,7 +26,7 @@ const App: React.FC = () => {
 
   const handleStartAnalysis = useCallback(async () => {
     if (!siteUrl || !/^(https?:\/\/)/.test(siteUrl)) {
-        setError("Please enter a valid URL (e.g., https://example.com)");
+        setError("Inserisci un URL valido (es. https://example.com)");
         return;
     }
     setIsLoading(true);
@@ -82,19 +82,19 @@ const App: React.FC = () => {
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
         <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Pages Scanned</p>
+          <p className="text-sm text-slate-500">Pagine Scansite</p>
           <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
         </div>
         <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Indexable Pages</p>
+          <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
           <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
         </div>
         <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Suggestions</p>
+          <p className="text-sm text-slate-500">Suggerimenti</p>
           <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
         </div>
         <div className="bg-green-100 p-4 rounded-lg">
-          <p className="text-sm text-green-600">High Priority</p>
+          <p className="text-sm text-green-600">Priorità Alta</p>
           <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
         </div>
       </div>
@@ -109,7 +109,7 @@ const App: React.FC = () => {
             <BrainCircuitIcon className="w-12 h-12 text-blue-600" />
             <div>
               <h1 className="text-4xl font-bold">Semantic-Interlinker-25</h1>
-              <p className="text-slate-500 mt-1">AI-Powered Internal Linking Suggestions for WordPress</p>
+              <p className="text-slate-500 mt-1">Suggerimenti di Link Interni basati su AI per WordPress</p>
             </div>
           </div>
         </header>
@@ -118,8 +118,8 @@ const App: React.FC = () => {
           {!report && !isLoading && (
             <div className="text-center py-16 max-w-2xl mx-auto">
               <DocumentTextIcon className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Ready to optimize your site structure?</h2>
-              <p className="text-slate-500 mb-6">Enter your WordPress site URL to start the semantic analysis and find high-impact internal linking opportunities.</p>
+              <h2 className="text-xl font-semibold mb-2">Pronto a ottimizzare la struttura del tuo sito?</h2>
+              <p className="text-slate-500 mb-6">Inserisci l'URL del tuo sito WordPress per avviare l'analisi semantica e trovare opportunità di link interni ad alto impatto.</p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
                   <input 
                       type="url"
@@ -137,7 +137,7 @@ const App: React.FC = () => {
                       className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                       <LinkIcon className="w-5 h-5" />
-                      Scan Site
+                      Analizza Sito
                   </button>
               </div>
               {error && 
@@ -152,8 +152,8 @@ const App: React.FC = () => {
           {isLoading && (
              <div className="text-center py-16 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
-                <h2 className="text-xl font-semibold mb-2">Analyzing {siteUrl}...</h2>
-                <p className="text-slate-500">Crawling pages, understanding semantics, and identifying opportunities.</p>
+                <h2 className="text-xl font-semibold mb-2">Analisi di {siteUrl} in corso...</h2>
+                <p className="text-slate-500">Scansione delle pagine, analisi semantica e identificazione delle opportunità.</p>
              </div>
           )}
 

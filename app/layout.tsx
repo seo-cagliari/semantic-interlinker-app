@@ -19,7 +19,7 @@ const sourceCodePro = Source_Code_Pro({
 
 export const metadata: Metadata = {
   title: 'Semantic Interlinker 25',
-  description: 'AI-Powered Internal Linking Suggestions for WordPress',
+  description: 'Suggerimenti di Link Interni basati su AI per WordPress',
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${sourceCodePro.variable}`}>
+    <html lang="it" className={`${inter.variable} ${sourceCodePro.variable}`}>
       <body>{children}</body>
     </html>
   );

@@ -30,17 +30,19 @@ export async function interlinkFlow(options: {
 
   // PHASE 1 UPGRADE: The prompt is now much more powerful and context-aware.
   const prompt = `
-    Act as a world-class SEO expert specializing in semantic internal linking for the website "${options.site_root}".
-    I have provided you with a complete list of all published URLs on this site.
-    Your task is to analyze the semantic relationships between these pages and generate a list of high-impact internal linking suggestions *between them*.
-    Do not suggest links to external sites or non-existent pages. All source and target URLs must come from the provided list.
+    Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per il sito web "${options.site_root}".
+    Ti ho fornito un elenco completo di tutti gli URL pubblicati su questo sito.
+    Il tuo compito è analizzare le relazioni semantiche tra queste pagine e generare un elenco di suggerimenti di link interni ad alto impatto *tra di esse*.
+    Non suggerire link a siti esterni o a pagine inesistenti. Tutti gli URL di origine e di destinazione devono provenire dall'elenco fornito.
 
-    Here is the complete list of available URLs:
+    Ecco l'elenco completo degli URL disponibili:
     ${allSiteUrls.join('\n')}
 
-    For each suggestion, provide a source URL, a target URL, a proposed anchor text with variants, a precise insertion hint, a semantic rationale, and risk checks.
-    Generate a realistic number of suggestions, between 3 and 7.
-    The score should be a float between 0.5 and 0.95, reflecting the quality and semantic relevance of the suggestion.
+    Per ogni suggerimento, fornisci un URL di origine, un URL di destinazione, un anchor text proposto con varianti, un suggerimento preciso per l'inserimento, una motivazione semantica e dei controlli di rischio.
+    Genera un numero realistico di suggerimenti, tra 3 e 7.
+    Il punteggio deve essere un numero decimale tra 0.5 e 0.95, che riflette la qualità e la rilevanza semantica del suggerimento.
+
+    IMPORTANTE: Fornisci tutti gli output testuali, inclusa la motivazione semantica, i suggerimenti per l'inserimento, le ragioni e le note, in lingua italiana.
   `;
 
   const responseSchema: any = {
