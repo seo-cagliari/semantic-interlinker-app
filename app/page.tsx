@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport } from '../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
@@ -41,7 +41,7 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
 
 const App: React.FC = () => {
   const [siteUrl, setSiteUrl] = useState<string>('');
-  const [maxSuggestions, setMaxSuggestions] = useState<number>(7);
+  const [maxSuggestions, setMaxSuggestions] = useState<number>(8);
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +91,10 @@ const App: React.FC = () => {
         
         const responseData: Report = await apiResponse.json();
         setReport(responseData);
-        if (responseData.allSiteUrls && responseData.allSiteUrls.length > 0) {
-            setSelectedDeepAnalysisUrl(responseData.allSiteUrls[0]);
+        if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
+            // Seleziona di default la pagina con il punteggio più alto
+            const sortedPages = [...responseData.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+            setSelectedDeepAnalysisUrl(sortedPages[0].url);
         }
     } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
@@ -102,7 +104,7 @@ const App: React.FC = () => {
   }, [siteUrl, maxSuggestions]);
 
   const handleDeepAnalysis = useCallback(async () => {
-    if (!selectedDeepAnalysisUrl || !report?.allSiteUrls) {
+    if (!selectedDeepAnalysisUrl || !report?.page_diagnostics) {
       setDeepError("Seleziona una pagina da analizzare.");
       return;
     }
@@ -116,7 +118,7 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pageUrl: selectedDeepAnalysisUrl,
-          allSiteUrls: report.allSiteUrls
+          pageDiagnostics: report.page_diagnostics
         })
       });
 
@@ -133,7 +135,7 @@ const App: React.FC = () => {
     } finally {
       setIsDeepLoading(false);
     }
-  }, [selectedDeepAnalysisUrl, report?.allSiteUrls]);
+  }, [selectedDeepAnalysisUrl, report?.page_diagnostics]);
   
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
@@ -250,7 +252,7 @@ const App: React.FC = () => {
              <div className="text-center py-16 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
                 <h2 className="text-xl font-semibold mb-2">Analisi di {siteUrl} in corso...</h2>
-                <p className="text-slate-500">Scansione delle pagine, creazione mappa tematica e generazione suggerimenti.</p>
+                <p className="text-slate-500">Calcolo autorità, creazione mappa tematica e generazione suggerimenti.</p>
              </div>
           )}
 
@@ -268,7 +270,11 @@ const App: React.FC = () => {
                      onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                    >
-                     {report.allSiteUrls.map(url => <option key={url} value={url}>{url}</option>)}
+                     {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
+                        <option key={page.url} value={page.url}>
+                          [{page.internal_authority_score.toFixed(1)}] - {page.title}
+                        </option>
+                     )}
                    </select>
                    <button
                      onClick={handleDeepAnalysis}

@@ -75,10 +75,19 @@ export type ContentEnhancementSuggestion = {
 
 export type DeepAnalysisReport = {
   analyzed_url: string;
+  authority_score: number;
   inbound_links: InboundLinkSuggestion[];
   outbound_links: OutboundLinkSuggestion[];
   content_enhancements: ContentEnhancementSuggestion[];
 };
+
+// --- Tipo per la diagnostica della pagina e l'autorità ---
+export type PageDiagnostic = {
+  url: string;
+  title: string;
+  internal_authority_score: number; // Score from 0 to 10
+};
+
 
 // --- Tipo principale del Report ---
 
@@ -89,6 +98,6 @@ export type Report = {
   thematic_clusters: ThematicCluster[];
   suggestions: Suggestion[];
   content_gap_suggestions: ContentGapSuggestion[];
-  allSiteUrls: string[]; // Aggiunto per popolare il dropdown
+  page_diagnostics: PageDiagnostic[]; // Sostituisce allSiteUrls
   notes?: string;
 };

@@ -1,17 +1,18 @@
 import { deepAnalysisFlow } from '../../../genkit/flows/interlinkFlow';
+import { PageDiagnostic } from '../../../types';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { pageUrl, allSiteUrls } = body;
+    const { pageUrl, pageDiagnostics } = body as { pageUrl: string; pageDiagnostics: PageDiagnostic[] };
 
-    if (!pageUrl || !allSiteUrls) {
-      return Response.json({ error: 'pageUrl and allSiteUrls are required.' }, { status: 400 });
+    if (!pageUrl || !pageDiagnostics) {
+      return Response.json({ error: 'pageUrl and pageDiagnostics are required.' }, { status: 400 });
     }
 
-    const report = await deepAnalysisFlow({ pageUrl, allSiteUrls });
+    const report = await deepAnalysisFlow({ pageUrl, pageDiagnostics });
 
     return Response.json(report);
 

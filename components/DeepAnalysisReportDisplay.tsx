@@ -7,13 +7,19 @@ interface DeepAnalysisReportDisplayProps {
 }
 
 export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps> = ({ report }) => {
+  const score = report.authority_score;
+  const scoreColorClass = score > 7 ? 'text-green-700 bg-green-100 border-green-200' : score > 4 ? 'text-yellow-700 bg-yellow-100 border-yellow-200' : 'text-slate-700 bg-slate-100 border-slate-200';
+
   return (
     <div className="mt-8 mb-12 animate-fade-in-up">
       <div className="mb-6 pb-4 border-b border-slate-200">
         <h2 className="text-2xl font-bold text-slate-800">Risultati Analisi Approfondita</h2>
-        <p className="text-slate-600">
-            Pagina analizzata: <a href={report.analyzed_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">{report.analyzed_url}</a>
-        </p>
+        <div className="text-slate-600 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>Pagina analizzata: <a href={report.analyzed_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">{report.analyzed_url}</a></span>
+            <span className={`px-2 py-0.5 rounded-full text-sm font-bold border ${scoreColorClass}`}>
+              Autorità: {score.toFixed(2)}/10
+            </span>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
