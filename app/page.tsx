@@ -1,16 +1,33 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
-import { SiteVisualizer } from '../components/SiteVisualizer';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon } from '../components/Icons';
 
 type ViewMode = 'report' | 'visualizer';
+
+// Dynamically import the SiteVisualizer component to ensure it's only loaded on the client-side
+const SiteVisualizer = dynamic(
+  () => import('../components/SiteVisualizer').then(mod => mod.SiteVisualizer),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex justify-center items-center h-[70vh] border border-slate-200 rounded-2xl bg-white shadow-lg">
+        <div className="text-center">
+          <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4"/>
+          <p className="text-slate-600 font-semibold">Caricamento visualizzatore...</p>
+        </div>
+      </div>
+    )
+  }
+);
+
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
   <div className="mb-12">
