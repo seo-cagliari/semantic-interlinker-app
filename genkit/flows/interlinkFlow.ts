@@ -71,7 +71,13 @@ export async function interlinkFlow(options: {
             seed: 42,
         },
     });
-    const clusterJson = JSON.parse(clusterResponse.text.trim());
+
+    const responseText = clusterResponse.text;
+    if (!responseText) {
+        throw new Error("Received an empty text response from Gemini during thematic clustering.");
+    }
+
+    const clusterJson = JSON.parse(responseText.trim());
     thematicClusters = clusterJson.thematic_clusters;
     console.log(`Phase 1 complete. Identified ${thematicClusters.length} thematic clusters.`);
   } catch (e) {
@@ -154,7 +160,12 @@ export async function interlinkFlow(options: {
           },
       });
       
-      const suggestionData = JSON.parse(response.text.trim());
+      const responseText = response.text;
+      if (!responseText) {
+        throw new Error("Received an empty text response from Gemini during suggestion generation.");
+      }
+      
+      const suggestionData = JSON.parse(responseText.trim());
       
       const finalReport: Report = {
         site: options.site_root,
