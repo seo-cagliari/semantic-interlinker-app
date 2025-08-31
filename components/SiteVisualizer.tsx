@@ -18,8 +18,7 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize useRef with null to fix the "Expected 1 arguments, but got 0" error.
-    const fgRef = useRef<ForceGraphMethods>(null);
+    const fgRef = useRef<ForceGraphMethods<NodeObject, LinkObject>>(null);
     const [highlightedNode, setHighlightedNode] = useState<NodeObject | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
     const [highlightNodes, setHighlightNodes] = useState<Set<NodeObject>>(new Set());
@@ -62,8 +61,20 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         links.forEach(link => {
             if (link.source === node.id || link.target === node.id) {
                 newHighlightLinks.add(link);
-                if (link.source) newHighlightNodes.add(link.source as NodeObject);
-                if (link.target) newHighlightNodes.add(link.target as NodeObject);
+                if (link.source && typeof link.source !== 'string' && typeof link.source !== 'number') newHighlightNodes.add(link.source);
+                if (link.target && typeof link.target !== 'string' && typeof link.target !== 'number') newHighlightNodes.add(link.target);
+            }
+        });
+
+        // Add nodes connected by the highlighted links
+        newHighlightLinks.forEach(link => {
+            if(link.source) {
+                const sourceNode = graphData.nodes.find(n => n.id === (typeof link.source === 'object' ? link.source.id : link.source));
+                if (sourceNode) newHighlightNodes.add(sourceNode);
+            }
+            if(link.target) {
+                const targetNode = graphData.nodes.find(n => n.id === (typeof link.target === 'object' ? link.target.id : link.target));
+                if(targetNode) newHighlightNodes.add(targetNode);
             }
         });
     
