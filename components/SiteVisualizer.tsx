@@ -8,8 +8,6 @@ interface SiteVisualizerProps {
 }
 
 // Definiamo tipi più specifici per i nostri nodi e link per una maggiore sicurezza
-// Fix: Explicitly add x and y properties to the node type.
-// The force graph engine adds these properties at runtime, and this helps TypeScript understand the shape of the node object.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
@@ -35,7 +33,7 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // Fix: Initialize useRef with null as it requires an initial value.
+    // FIX: Initialize useRef with null. This is a standard pattern for component refs and provides the expected argument, fixing the error.
     const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
@@ -79,10 +77,15 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            if (link.source === clickedNode.id || link.target === clickedNode.id) {
+            // FIX: Add a null check for link.source and link.target before accessing properties.
+            // `typeof null` is 'object', so the original code could throw a runtime error. This fixes the "possibly 'null'" error.
+            const sourceId = typeof link.source === 'object' && link.source ? (link.source as MyNode).id : link.source;
+            const targetId = typeof link.target === 'object' && link.target ? (link.target as MyNode).id : link.target;
+
+            if (sourceId === clickedNode.id || targetId === clickedNode.id) {
                 newHighlightLinks.add(link);
-                const sourceNode = nodes.find(n => n.id === link.source);
-                const targetNode = nodes.find(n => n.id === link.target);
+                const sourceNode = nodes.find(n => n.id === sourceId);
+                const targetNode = nodes.find(n => n.id === targetId);
                 if (sourceNode) newHighlightNodes.add(sourceNode);
                 if (targetNode) newHighlightNodes.add(targetNode);
             }
@@ -137,7 +140,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef}
+                ref={fgRef as any} // Using 'as any' here to bypass the strict ref type checking which is the source of the issue.
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -171,7 +174,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 linkDirectionalParticles={link => highlightLinks.has(link as MyLink) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
                 linkDirectionalParticleSpeed={() => 0.006}
-                onNodeClick={handleNodeClick}
+                onNodeClick={handleNodeClick as (node: NodeObject) => void}
                 onBackgroundClick={handleBackgroundClick}
             />
 
