@@ -30,11 +30,19 @@ export async function interlinkFlow(options: {
   // PHASE 1: THEMATIC CLUSTERING
   console.log("Starting Phase 1: Thematic Clustering...");
   const clusterPrompt = `
-    Agisci come un architetto dell'informazione e un esperto SEO. Ti ho fornito un elenco completo di tutti gli URL pubblicati sul sito "${options.site_root}".
-    Il tuo primo compito è analizzare questo elenco e raggruppare gli URL in cluster tematici.
-    Per ogni cluster, fornisci un nome conciso e una breve descrizione (massimo 15 parole) che ne riassuma l'argomento principale.
-    Ignora le pagine generiche come "contatti" o "privacy policy" a meno che non siano centrali per il sito.
-    Crea tra 3 e 6 cluster significativi.
+    Agisci come un architetto dell'informazione e un esperto SEO per il sito "${options.site_root}".
+    Ti viene fornito un elenco completo di URL dal sito.
+    Il tuo compito è analizzare e raggruppare questi URL in 3-6 cluster tematici significativi.
+
+    Per ogni cluster, devi fornire:
+    1.  'cluster_name': Un nome conciso e descrittivo per il tema.
+    2.  'cluster_description': Una breve frase (massimo 15 parole) che riassume l'argomento.
+    3.  'pages': Un array contenente gli URL **dalla lista fornita** che appartengono a questo cluster.
+
+    REGOLE IMPORTANTI:
+    - La tua risposta DEVE essere un oggetto JSON valido che rispetti lo schema fornito.
+    - Assegna ogni URL a un solo cluster.
+    - Ignora pagine puramente funzionali (es. privacy, contatti) a meno che non siano centrali per il sito.
 
     Elenco completo degli URL da analizzare:
     ${allSiteUrls.join('\n')}
