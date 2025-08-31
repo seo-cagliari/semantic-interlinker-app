@@ -7,7 +7,10 @@ import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon } from '../components/Icons';
+import { SiteVisualizer } from '../components/SiteVisualizer';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon } from '../components/Icons';
+
+type ViewMode = 'report' | 'visualizer';
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
   <div className="mb-12">
@@ -45,6 +48,7 @@ const App: React.FC = () => {
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   // State for Modals
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
@@ -72,6 +76,7 @@ const App: React.FC = () => {
     setDeepError(null);
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
+    setViewMode('report');
 
     try {
         const apiResponse = await fetch('/api/analyze', {
@@ -92,7 +97,6 @@ const App: React.FC = () => {
         const responseData: Report = await apiResponse.json();
         setReport(responseData);
         if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
-            // Seleziona di default la pagina con il punteggio più alto
             const sortedPages = [...responseData.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
             setSelectedDeepAnalysisUrl(sortedPages[0].url);
         }
@@ -159,25 +163,45 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const renderSummary = () => {
+  const renderSummaryAndActions = () => {
     if (!report) return null;
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 text-center">
-        <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Pagine Scansite</p>
-          <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
+      <div className="mb-10">
+        <div className="flex justify-end mb-4">
+            <button 
+              onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              {viewMode === 'report' ? (
+                <>
+                  <RectangleGroupIcon className="w-5 h-5"/>
+                  Visualizza Architettura
+                </>
+              ) : (
+                <>
+                  <DocumentTextIcon className="w-5 h-5"/>
+                  Visualizza Report
+                </>
+              )}
+            </button>
         </div>
-        <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
-          <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
-        </div>
-        <div className="bg-slate-100 p-4 rounded-lg">
-          <p className="text-sm text-slate-500">Suggerimenti</p>
-          <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
-        </div>
-        <div className="bg-green-100 p-4 rounded-lg">
-          <p className="text-sm text-green-600">Priorità Alta</p>
-          <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div className="bg-slate-100 p-4 rounded-lg">
+            <p className="text-sm text-slate-500">Pagine Scansite</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
+          </div>
+          <div className="bg-slate-100 p-4 rounded-lg">
+            <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
+          </div>
+          <div className="bg-slate-100 p-4 rounded-lg">
+            <p className="text-sm text-slate-500">Suggerimenti</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
+          </div>
+          <div className="bg-green-100 p-4 rounded-lg">
+            <p className="text-sm text-green-600">Priorità Alta</p>
+            <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
+          </div>
         </div>
       </div>
     );
@@ -258,70 +282,77 @@ const App: React.FC = () => {
 
           {report && (
             <div className="animate-fade-in-up">
-              {renderSummary()}
-              {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
-              
-              <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
-                <p className="text-slate-600 mb-4">Seleziona una pagina per analizzarne il contenuto e ricevere suggerimenti specifici su link interni e miglioramenti.</p>
-                <div className="flex flex-col sm:flex-row gap-2 items-center">
-                   <select
-                     value={selectedDeepAnalysisUrl}
-                     onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
-                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-                   >
-                     {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
-                        <option key={page.url} value={page.url}>
-                          [{page.internal_authority_score.toFixed(1)}] - {page.title}
-                        </option>
-                     )}
-                   </select>
-                   <button
-                     onClick={handleDeepAnalysis}
-                     disabled={isDeepLoading}
-                     className="w-full sm:w-auto bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
-                   >
-                     {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
-                     Analisi Dettagliata
-                   </button>
-                </div>
-                {deepError && 
-                  <div className="mt-4 flex items-center gap-2 text-red-600">
-                    <XCircleIcon className="w-5 h-5" />
-                    <p className="text-sm">{deepError}</p>
-                  </div>
-                }
-              </div>
+              {renderSummaryAndActions()}
 
-              {isDeepLoading && (
-                <div className="text-center py-12 flex flex-col items-center">
-                  <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
-                  <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
-                  <p className="text-slate-500 max-w-md">Sto leggendo il contenuto della pagina e generando suggerimenti per link inbound, outbound e miglioramenti testuali.</p>
-                </div>
-              )}
-
-              {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
-              
-              <div className="flex items-center gap-3 mb-4 mt-16">
-                <LinkIcon className="w-8 h-8 text-slate-500" />
-                <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
-              </div>
-              <div className="space-y-6">
-                {report.suggestions.map((suggestion, index) => (
-                  <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-                    <SuggestionCard
-                      suggestion={suggestion}
-                      isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
-                      onViewJson={handleViewJson}
-                      onViewModification={handleViewModification}
-                      onToggleSelection={handleToggleSelection}
-                    />
+              {viewMode === 'visualizer' ? (
+                <SiteVisualizer report={report} />
+              ) : (
+                <>
+                  {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
+                  
+                  <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
+                    <p className="text-slate-600 mb-4">Seleziona una pagina per analizzarne il contenuto e ricevere suggerimenti specifici su link interni e miglioramenti.</p>
+                    <div className="flex flex-col sm:flex-row gap-2 items-center">
+                      <select
+                        value={selectedDeepAnalysisUrl}
+                        onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                      >
+                        {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
+                            <option key={page.url} value={page.url}>
+                              [{page.internal_authority_score.toFixed(1)}] - {page.title}
+                            </option>
+                        )}
+                      </select>
+                      <button
+                        onClick={handleDeepAnalysis}
+                        disabled={isDeepLoading}
+                        className="w-full sm:w-auto bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
+                      >
+                        {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                        Analisi Dettagliata
+                      </button>
+                    </div>
+                    {deepError && 
+                      <div className="mt-4 flex items-center gap-2 text-red-600">
+                        <XCircleIcon className="w-5 h-5" />
+                        <p className="text-sm">{deepError}</p>
+                      </div>
+                    }
                   </div>
-                ))}
-              </div>
-               {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
-                <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+
+                  {isDeepLoading && (
+                    <div className="text-center py-12 flex flex-col items-center">
+                      <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
+                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
+                      <p className="text-slate-500 max-w-md">Sto leggendo il contenuto della pagina e generando suggerimenti per link inbound, outbound e miglioramenti testuali.</p>
+                    </div>
+                  )}
+
+                  {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
+                  
+                  <div className="flex items-center gap-3 mb-4 mt-16">
+                    <LinkIcon className="w-8 h-8 text-slate-500" />
+                    <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
+                  </div>
+                  <div className="space-y-6">
+                    {report.suggestions.map((suggestion, index) => (
+                      <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                        <SuggestionCard
+                          suggestion={suggestion}
+                          isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
+                          onViewJson={handleViewJson}
+                          onViewModification={handleViewModification}
+                          onToggleSelection={handleToggleSelection}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                    <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+                  )}
+                </>
               )}
             </div>
           )}

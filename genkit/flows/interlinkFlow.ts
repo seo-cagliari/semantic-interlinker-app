@@ -97,7 +97,6 @@ export async function interlinkFlow(options: {
 
   // PHASE 1: THEMATIC CLUSTERING
   console.log("Starting Phase 1: Thematic Clustering...");
-  // ... (The rest of the phases remain largely the same, but using allSiteUrls derived from pageDiagnostics)
   const clusterPrompt = `
     Agisci come un architetto dell'informazione e un esperto SEO per il sito "${options.site_root}".
     Ti viene fornito un elenco completo di URL dal sito.
@@ -153,8 +152,8 @@ export async function interlinkFlow(options: {
     throw new Error(`Failed to generate thematic clusters. Error: ${detailedError}`);
   }
 
-  // PHASE 2 & 3 (Suggerimenti e Content Gap) procedono come prima...
-  // ... [Codice per FASE 2 e 3 omesso per brevità, è identico a prima] ...
+  // PHASE 2: STRATEGIC LINKING SUGGESTIONS
+  console.log("Starting Phase 2: Strategic Linking Suggestions...");
   const suggestionPrompt = `
     Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per il sito web "${options.site_root}".
     Ho già analizzato il sito e l'ho strutturato nei seguenti cluster tematici:
@@ -235,6 +234,7 @@ export async function interlinkFlow(options: {
   }
 
   // PHASE 3: CONTENT GAP ANALYSIS
+  console.log("Starting Phase 3: Content Gap Analysis...");
   const contentGapPrompt = `
     Agisci come un SEO Content Strategist di livello mondiale per il sito "${options.site_root}".
     L'analisi del sito ha rivelato i seguenti cluster tematici principali:
@@ -295,6 +295,7 @@ export async function interlinkFlow(options: {
     suggestions: reportSuggestions,
     content_gap_suggestions: contentGapSuggestions,
     page_diagnostics: pageDiagnostics,
+    internal_links_map: internalLinksMap,
     summary: {
         pages_scanned: allSiteUrls.length,
         indexable_pages: allSiteUrls.length,

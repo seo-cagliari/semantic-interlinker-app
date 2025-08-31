@@ -98,6 +98,7 @@ export type Report = {
   thematic_clusters: ThematicCluster[];
   suggestions: Suggestion[];
   content_gap_suggestions: ContentGapSuggestion[];
-  page_diagnostics: PageDiagnostic[]; // Sostituisce allSiteUrls
+  page_diagnostics: PageDiagnostic[];
+  internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   notes?: string;
 };
