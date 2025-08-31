@@ -1,10 +1,27 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Report } from '../types';
-import { BrainCircuitIcon, FolderIcon } from './Icons';
+import { BrainCircuitIcon } from './Icons';
 
 interface SiteVisualizerProps {
   report: Report;
+}
+
+// Definiamo tipi più specifici per i nostri nodi e link per una maggiore sicurezza
+// Fix: Explicitly add x and y properties to the node type.
+// The force graph engine adds these properties at runtime, and this helps TypeScript understand the shape of the node object.
+interface MyNode extends NodeObject {
+    id: string;
+    name: string;
+    val: number;
+    score: number;
+    x?: number;
+    y?: number;
+}
+
+interface MyLink extends LinkObject {
+    source: string;
+    target: string;
 }
 
 const colorPalette = [
@@ -18,20 +35,22 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    const fgRef = useRef<ForceGraphMethods<NodeObject, LinkObject>>(null);
-    const [highlightedNode, setHighlightedNode] = useState<NodeObject | null>(null);
-    const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
-    const [highlightNodes, setHighlightNodes] = useState<Set<NodeObject>>(new Set());
+    // Fix: Initialize useRef with null as it requires an initial value.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
+
+    const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
+    const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
+    const [highlightNodes, setHighlightNodes] = useState<Set<MyNode>>(new Set());
 
     const graphData = useMemo(() => {
-        const nodes: NodeObject[] = report.page_diagnostics.map(page => ({
+        const nodes: MyNode[] = report.page_diagnostics.map(page => ({
             id: page.url,
             name: page.title,
             val: Math.max(0.5, page.internal_authority_score),
             score: page.internal_authority_score,
         }));
 
-        const links: LinkObject[] = [];
+        const links: MyLink[] = [];
         for (const source in report.internal_links_map) {
             for (const target of report.internal_links_map[source]) {
                 if(nodes.some(n => n.id === source) && nodes.some(n => n.id === target)) {
@@ -54,36 +73,27 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
     }, [report.thematic_clusters]);
 
     const handleNodeClick = useCallback((node: NodeObject) => {
-        const { links } = graphData;
-        const newHighlightLinks = new Set<LinkObject>();
-        const newHighlightNodes = new Set<NodeObject>([node]);
+        const clickedNode = node as MyNode;
+        const { links, nodes } = graphData;
+        const newHighlightLinks = new Set<MyLink>();
+        const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            if (link.source === node.id || link.target === node.id) {
+            if (link.source === clickedNode.id || link.target === clickedNode.id) {
                 newHighlightLinks.add(link);
-                if (link.source && typeof link.source !== 'string' && typeof link.source !== 'number') newHighlightNodes.add(link.source);
-                if (link.target && typeof link.target !== 'string' && typeof link.target !== 'number') newHighlightNodes.add(link.target);
-            }
-        });
-
-        // Add nodes connected by the highlighted links
-        newHighlightLinks.forEach(link => {
-            if(link.source) {
-                const sourceNode = graphData.nodes.find(n => n.id === (typeof link.source === 'object' ? link.source.id : link.source));
+                const sourceNode = nodes.find(n => n.id === link.source);
+                const targetNode = nodes.find(n => n.id === link.target);
                 if (sourceNode) newHighlightNodes.add(sourceNode);
-            }
-            if(link.target) {
-                const targetNode = graphData.nodes.find(n => n.id === (typeof link.target === 'object' ? link.target.id : link.target));
-                if(targetNode) newHighlightNodes.add(targetNode);
+                if (targetNode) newHighlightNodes.add(targetNode);
             }
         });
     
-        setHighlightedNode(node);
+        setHighlightedNode(clickedNode);
         setHighlightLinks(newHighlightLinks);
         setHighlightNodes(newHighlightNodes);
 
-        if(fgRef.current){
-            fgRef.current.centerAt(node.x!, node.y!, 1000);
+        if(fgRef.current && clickedNode.x !== undefined && clickedNode.y !== undefined){
+            fgRef.current.centerAt(clickedNode.x, clickedNode.y, 1000);
             fgRef.current.zoom(2.5, 1000);
         }
 
@@ -99,10 +109,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
     }, []);
 
     const getNodeColor = (node: NodeObject) => clusterColorMap.get(node.id as string) || '#9ca3af';
+    const getLinkColor = (link: LinkObject) => highlightLinks.has(link as MyLink) ? '#4f46e5' : '#d1d5db';
 
-    const getLinkColor = (link: LinkObject) => highlightLinks.has(link) ? '#4f46e5' : '#d1d5db';
-
-    // Auto-zoom on first load
     useEffect(() => {
         setTimeout(() => {
             if(fgRef.current){
@@ -133,16 +141,17 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
-                    const label = node.name || '';
+                    const myNode = node as MyNode;
+                    const label = myNode.name || '';
                     const fontSize = 12 / globalScale;
-                    const isHighlighted = highlightedNode === null || highlightNodes.has(node);
+                    const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
                     ctx.beginPath();
-                    ctx.arc(node.x!, node.y!, node.val as number, 0, 2 * Math.PI, false);
-                    ctx.fillStyle = isHighlighted ? getNodeColor(node) : 'rgba(156, 163, 175, 0.5)';
+                    ctx.arc(myNode.x!, myNode.y!, myNode.val, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = isHighlighted ? getNodeColor(myNode) : 'rgba(156, 163, 175, 0.5)';
                     ctx.fill();
 
-                    if (highlightedNode === node) {
+                    if (highlightedNode === myNode) {
                         ctx.strokeStyle = '#3b82f6';
                         ctx.lineWidth = 2 / globalScale;
                         ctx.stroke();
@@ -154,12 +163,12 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                         ctx.textBaseline = 'middle';
                         ctx.fillStyle = isHighlighted ? '#1e293b' : 'rgba(100, 115, 135, 0.8)';
                         const shortLabel = label.length > 25 ? `${label.substring(0, 25)}...` : label;
-                        ctx.fillText(shortLabel, node.x!, node.y! + (node.val as number) + 4);
+                        ctx.fillText(shortLabel, myNode.x!, myNode.y! + myNode.val + 4);
                     }
                 }}
-                linkWidth={link => highlightLinks.has(link) ? 2 : 0.5}
+                linkWidth={link => highlightLinks.has(link as MyLink) ? 2 : 0.5}
                 linkColor={getLinkColor}
-                linkDirectionalParticles={link => highlightLinks.has(link) ? 2 : 0}
+                linkDirectionalParticles={link => highlightLinks.has(link as MyLink) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
                 linkDirectionalParticleSpeed={() => 0.006}
                 onNodeClick={handleNodeClick}
@@ -171,7 +180,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                    <h3 className="font-bold text-lg text-slate-900 truncate" title={highlightedNode.name as string}>{highlightedNode.name}</h3>
                    <div className="flex items-center gap-4 text-sm mt-1">
                       <span className="font-semibold" style={{ color: getNodeColor(highlightedNode) }}>
-                         Autorità: {(highlightedNode.score as number).toFixed(2)}/10
+                         Autorità: {highlightedNode.score.toFixed(2)}/10
                       </span>
                       <a href={highlightedNode.id as string} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                           Apri Pagina
