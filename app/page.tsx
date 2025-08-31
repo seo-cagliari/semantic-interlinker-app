@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Suggestion, Report, ThematicCluster } from '../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
+import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon } from '../components/Icons';
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
@@ -45,13 +46,19 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
+  // State for Modals
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
-  
   const [isModificationModalOpen, setIsModificationModalOpen] = useState<boolean>(false);
   const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
-
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  
+  // State for Deep Analysis
+  const [selectedDeepAnalysisUrl, setSelectedDeepAnalysisUrl] = useState<string>('');
+  const [deepAnalysisReport, setDeepAnalysisReport] = useState<DeepAnalysisReport | null>(null);
+  const [isDeepLoading, setIsDeepLoading] = useState<boolean>(false);
+  const [deepError, setDeepError] = useState<string | null>(null);
+
 
   const handleStartAnalysis = useCallback(async () => {
     if (!siteUrl || !/^(https?:\/\/)/.test(siteUrl)) {
@@ -61,6 +68,9 @@ const App: React.FC = () => {
     setIsLoading(true);
     setReport(null);
     setError(null);
+    setDeepAnalysisReport(null);
+    setDeepError(null);
+    setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
 
     try {
@@ -81,12 +91,49 @@ const App: React.FC = () => {
         
         const responseData: Report = await apiResponse.json();
         setReport(responseData);
+        if (responseData.allSiteUrls && responseData.allSiteUrls.length > 0) {
+            setSelectedDeepAnalysisUrl(responseData.allSiteUrls[0]);
+        }
     } catch (err) {
         setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
     } finally {
         setIsLoading(false);
     }
   }, [siteUrl, maxSuggestions]);
+
+  const handleDeepAnalysis = useCallback(async () => {
+    if (!selectedDeepAnalysisUrl || !report?.allSiteUrls) {
+      setDeepError("Seleziona una pagina da analizzare.");
+      return;
+    }
+    setIsDeepLoading(true);
+    setDeepAnalysisReport(null);
+    setDeepError(null);
+
+    try {
+      const apiResponse = await fetch('/api/deep-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pageUrl: selectedDeepAnalysisUrl,
+          allSiteUrls: report.allSiteUrls
+        })
+      });
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
+        throw new Error(errorData.details || `Server responded with status ${apiResponse.status}`);
+      }
+      
+      const responseData: DeepAnalysisReport = await apiResponse.json();
+      setDeepAnalysisReport(responseData);
+
+    } catch (err) {
+      setDeepError(err instanceof Error ? err.message : "An unknown error occurred during deep analysis.");
+    } finally {
+      setIsDeepLoading(false);
+    }
+  }, [selectedDeepAnalysisUrl, report?.allSiteUrls]);
   
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
@@ -208,13 +255,51 @@ const App: React.FC = () => {
           )}
 
           {report && (
-            <>
+            <div className="animate-fade-in-up">
               {renderSummary()}
               {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
               
-              <div className="flex items-center gap-3 mb-4 mt-8">
+              <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
+                <p className="text-slate-600 mb-4">Seleziona una pagina per analizzarne il contenuto e ricevere suggerimenti specifici su link interni e miglioramenti.</p>
+                <div className="flex flex-col sm:flex-row gap-2 items-center">
+                   <select
+                     value={selectedDeepAnalysisUrl}
+                     onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
+                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                   >
+                     {report.allSiteUrls.map(url => <option key={url} value={url}>{url}</option>)}
+                   </select>
+                   <button
+                     onClick={handleDeepAnalysis}
+                     disabled={isDeepLoading}
+                     className="w-full sm:w-auto bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
+                   >
+                     {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                     Analisi Dettagliata
+                   </button>
+                </div>
+                {deepError && 
+                  <div className="mt-4 flex items-center gap-2 text-red-600">
+                    <XCircleIcon className="w-5 h-5" />
+                    <p className="text-sm">{deepError}</p>
+                  </div>
+                }
+              </div>
+
+              {isDeepLoading && (
+                <div className="text-center py-12 flex flex-col items-center">
+                  <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
+                  <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
+                  <p className="text-slate-500 max-w-md">Sto leggendo il contenuto della pagina e generando suggerimenti per link inbound, outbound e miglioramenti testuali.</p>
+                </div>
+              )}
+
+              {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
+              
+              <div className="flex items-center gap-3 mb-4 mt-16">
                 <LinkIcon className="w-8 h-8 text-slate-500" />
-                <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento</h2>
+                <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
               </div>
               <div className="space-y-6">
                 {report.suggestions.map((suggestion, index) => (
@@ -232,7 +317,7 @@ const App: React.FC = () => {
                {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
                 <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
               )}
-            </>
+            </div>
           )}
         </main>
       </div>

@@ -54,6 +54,34 @@ export type ContentGapSuggestion = {
   relevant_cluster: string;
 };
 
+// --- Tipi per l'Analisi Approfondita ---
+
+export type InboundLinkSuggestion = {
+  source_url: string;
+  proposed_anchor: string;
+  semantic_rationale: string;
+};
+
+export type OutboundLinkSuggestion = {
+  target_url: string;
+  proposed_anchor: string;
+  semantic_rationale: string;
+};
+
+export type ContentEnhancementSuggestion = {
+  suggestion_title: string;
+  description: string;
+};
+
+export type DeepAnalysisReport = {
+  analyzed_url: string;
+  inbound_links: InboundLinkSuggestion[];
+  outbound_links: OutboundLinkSuggestion[];
+  content_enhancements: ContentEnhancementSuggestion[];
+};
+
+// --- Tipo principale del Report ---
+
 export type Report = {
   site: string;
   generated_at: string;
@@ -61,5 +89,6 @@ export type Report = {
   thematic_clusters: ThematicCluster[];
   suggestions: Suggestion[];
   content_gap_suggestions: ContentGapSuggestion[];
+  allSiteUrls: string[]; // Aggiunto per popolare il dropdown
   notes?: string;
 };

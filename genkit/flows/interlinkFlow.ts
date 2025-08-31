@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport } from '../../types';
 import { wp } from '../tools/wp';
 
 export async function interlinkFlow(options: {
@@ -271,6 +271,7 @@ export async function interlinkFlow(options: {
     thematic_clusters: thematicClusters,
     suggestions: reportSuggestions,
     content_gap_suggestions: contentGapSuggestions,
+    allSiteUrls: allSiteUrls,
     summary: {
         pages_scanned: allSiteUrls.length,
         indexable_pages: allSiteUrls.length,
@@ -281,4 +282,124 @@ export async function interlinkFlow(options: {
   
   console.log("Analysis finished. Returning final report.");
   return finalReport;
+}
+
+
+// --- NUOVO FLUSSO PER ANALISI APPROFONDITA ---
+export async function deepAnalysisFlow(options: {
+  pageUrl: string;
+  allSiteUrls: string[];
+}): Promise<DeepAnalysisReport> {
+  console.log(`Starting deep analysis for ${options.pageUrl}`);
+
+  const pageContent = await wp.getPageContent(options.pageUrl);
+  if (!pageContent) {
+    throw new Error(`Could not retrieve content for page: ${options.pageUrl}`);
+  }
+
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+  const deepAnalysisPrompt = `
+    Agisci come un SEO Architect di livello mondiale. Il tuo compito è analizzare in profondità una singola pagina per ottimizzare la sua rete di link interni e il suo contenuto.
+
+    Pagina da analizzare: ${options.pageUrl}
+
+    Contesto: Questo è l'elenco di tutte le altre pagine del sito.
+    ${options.allSiteUrls.filter(url => url !== options.pageUrl).join('\n')}
+
+    Contenuto della pagina (testo pulito):
+    ---
+    ${pageContent.substring(0, 8000)} 
+    ---
+
+    Basandoti sull'analisi semantica del contenuto, genera un report JSON con tre sezioni:
+
+    1.  'inbound_links': Suggerisci un elenco di 3-5 pagine **dall'elenco di contesto** che dovrebbero collegarsi a questa pagina. Per ciascuna, fornisci:
+        - 'source_url': L'URL della pagina che dovrebbe aggiungere il link.
+        - 'proposed_anchor': L'anchor text più semanticamente rilevante.
+        - 'semantic_rationale': Una breve motivazione del perché questo link è strategicamente valido.
+
+    2.  'outbound_links': Suggerisci un elenco di 2-4 link che questa pagina dovrebbe aggiungere verso **altre pagine dell'elenco di contesto**. Per ciascuna, fornisci:
+        - 'target_url': L'URL della pagina da collegare.
+        - 'proposed_anchor': L'anchor text da usare nel contenuto della pagina analizzata.
+        - 'semantic_rationale': Il motivo per cui questo link arricchisce il contenuto e aiuta l'utente.
+
+    3.  'content_enhancements': Suggerisci 2-3 miglioramenti concreti per il contenuto della pagina analizzata per aumentarne l'autorità e la completezza. Per ciascuno, fornisci:
+        - 'suggestion_title': Un titolo per il suggerimento (es. "Aggiungi un paragrafo su...").
+        - 'description': Una descrizione dettagliata del miglioramento proposto.
+
+    REGOLE CRITICHE:
+    - Tutti gli URL suggeriti DEVONO provenire dall'elenco di contesto fornito.
+    - Tutte le risposte testuali devono essere in lingua italiana.
+    - La risposta DEVE essere un oggetto JSON valido che rispetti lo schema.
+  `;
+
+  const deepAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        analyzed_url: { type: Type.STRING },
+        inbound_links: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    source_url: { type: Type.STRING },
+                    proposed_anchor: { type: Type.STRING },
+                    semantic_rationale: { type: Type.STRING }
+                },
+                required: ["source_url", "proposed_anchor", "semantic_rationale"]
+            }
+        },
+        outbound_links: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    target_url: { type: Type.STRING },
+                    proposed_anchor: { type: Type.STRING },
+                    semantic_rationale: { type: Type.STRING }
+                },
+                required: ["target_url", "proposed_anchor", "semantic_rationale"]
+            }
+        },
+        content_enhancements: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    suggestion_title: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                },
+                required: ["suggestion_title", "description"]
+            }
+        }
+    },
+    required: ["analyzed_url", "inbound_links", "outbound_links", "content_enhancements"]
+  };
+
+  try {
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: deepAnalysisPrompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: deepAnalysisSchema,
+            seed: 42,
+        },
+    });
+
+    const responseText = response.text;
+    if (!responseText) {
+        throw new Error("Received empty response from Gemini during deep analysis.");
+    }
+
+    const report = JSON.parse(responseText.trim());
+    console.log(`Deep analysis for ${options.pageUrl} complete.`);
+    return report;
+
+  } catch (e) {
+    console.error(`Error during deep analysis for ${options.pageUrl}:`, e);
+    const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+    throw new Error(`Failed to generate deep analysis report. Error: ${detailedError}`);
+  }
 }
