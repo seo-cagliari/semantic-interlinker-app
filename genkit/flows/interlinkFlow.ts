@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { Report, Suggestion } from '../../types';
+import { wp } from '../tools/wp';
 
 // This is the real implementation of the Genkit flow using Gemini API.
 export async function interlinkFlow(options: {
@@ -15,16 +16,31 @@ export async function interlinkFlow(options: {
   if (!options.site_root) {
       throw new Error("site_root is required for analysis.");
   }
+  
+  // PHASE 1 UPGRADE: Fetch all published URLs to provide context to the AI.
+  console.log(`Fetching all published URLs for ${options.site_root}...`);
+  const allSiteUrls = await wp.getAllPublishedUrls(options.site_root);
+  console.log(`Found ${allSiteUrls.length} published URLs.`);
+
+  if (allSiteUrls.length === 0) {
+    throw new Error("Could not find any published posts or pages on the specified WordPress site. Please check the URL and site configuration.");
+  }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
+  // PHASE 1 UPGRADE: The prompt is now much more powerful and context-aware.
   const prompt = `
-    Analyze the website structure of "${options.site_root}" and act as a world-class SEO expert specializing in semantic internal linking.
-    Your task is to generate a list of high-impact internal linking suggestions.
+    Act as a world-class SEO expert specializing in semantic internal linking for the website "${options.site_root}".
+    I have provided you with a complete list of all published URLs on this site.
+    Your task is to analyze the semantic relationships between these pages and generate a list of high-impact internal linking suggestions *between them*.
+    Do not suggest links to external sites or non-existent pages. All source and target URLs must come from the provided list.
+
+    Here is the complete list of available URLs:
+    ${allSiteUrls.join('\n')}
+
     For each suggestion, provide a source URL, a target URL, a proposed anchor text with variants, a precise insertion hint, a semantic rationale, and risk checks.
     Generate a realistic number of suggestions, between 3 and 7.
-    The score should be a float between 0.5 and 0.95, reflecting the quality of the suggestion.
-    All URLs must be absolute paths starting with a "/" and be relevant to the given site root.
+    The score should be a float between 0.5 and 0.95, reflecting the quality and semantic relevance of the suggestion.
   `;
 
   const responseSchema: any = {
@@ -110,6 +126,9 @@ export async function interlinkFlow(options: {
       // Post-process to ensure data consistency
       report.site = options.site_root;
       report.generated_at = new Date().toISOString();
+      // Update summary based on the new context
+      report.summary.pages_scanned = allSiteUrls.length; 
+      report.summary.indexable_pages = allSiteUrls.length; // Assuming all fetched URLs are indexable for now
       report.summary.suggestions_total = report.suggestions.length;
       report.summary.high_priority = report.suggestions.filter(s => s.score >= 0.75).length;
       

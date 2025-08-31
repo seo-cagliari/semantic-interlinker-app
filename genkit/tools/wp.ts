@@ -12,8 +12,71 @@ const getEnv = (key: string): string => {
   return value;
 };
 
+// Helper to fetch all items from a paginated WP endpoint
+const fetchAllPaginated = async (endpoint: string, headers: HeadersInit): Promise<any[]> => {
+    let allItems: any[] = [];
+    let page = 1;
+    const perPage = 100; // Max allowed by WP REST API
+    let totalPages = 1;
+
+    while (page <= totalPages) {
+        const response = await fetch(`${endpoint}?per_page=${perPage}&page=${page}&status=publish&_fields=link`, { headers });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch from ${endpoint}. Status: ${response.status}`);
+        }
+        
+        // WP REST API returns total pages in headers
+        const totalPagesHeader = response.headers.get('X-WP-TotalPages');
+        if (totalPagesHeader) {
+            totalPages = parseInt(totalPagesHeader, 10);
+        }
+
+        const items = await response.json();
+        if (Array.isArray(items)) {
+            allItems = allItems.concat(items);
+        }
+        
+        // If the header is missing, and we got less than perPage items, it's the last page
+        if (!totalPagesHeader && items.length < perPage) {
+            break;
+        }
+
+        page++;
+    }
+    return allItems;
+};
+
 // Real implementation of the MCP WordPress tool
 export const wp = {
+  async getAllPublishedUrls(siteRoot: string): Promise<string[]> {
+    console.log(`Starting to fetch all published URLs from ${siteRoot}`);
+    const WP_URL = siteRoot.replace(/\/$/, '');
+    
+    // For public posts, we don't need authentication
+    const headers = { 'Content-Type': 'application/json' };
+
+    try {
+        const postsEndpoint = `${WP_URL}/wp-json/wp/v2/posts`;
+        const pagesEndpoint = `${WP_URL}/wp-json/wp/v2/pages`;
+
+        const [posts, pages] = await Promise.all([
+            fetchAllPaginated(postsEndpoint, headers),
+            fetchAllPaginated(pagesEndpoint, headers)
+        ]);
+        
+        const allUrls = [...posts, ...pages].map(item => item.link);
+        console.log(`Successfully fetched ${allUrls.length} URLs.`);
+        return allUrls;
+
+    } catch(error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error("Failed to fetch all published URLs:", errorMessage);
+        // Instead of throwing, we might return an empty array or handle it gracefully
+        // For now, re-throwing to make it clear something failed.
+        throw new Error(`Could not retrieve URLs from WordPress: ${errorMessage}`);
+    }
+  },
+
   async createDraftsBatched(suggestions: Suggestion[]) {
     console.log(`MCP: Starting batch creation of ${suggestions.length} drafts in WordPress...`);
 
@@ -33,18 +96,14 @@ export const wp = {
     for (const suggestion of suggestions) {
       try {
         // 1. Find the source post ID from its URL
-        const sourceUrl = new URL(suggestion.source_url);
-        const sourceSlug = sourceUrl.pathname.split('/').filter(Boolean).pop();
-        if (!sourceSlug) {
-            throw new Error(`Could not determine slug from source URL: ${suggestion.source_url}`);
-        }
+        const sourceUrlPath = new URL(suggestion.source_url).pathname;
         
-        const postsResponse = await fetch(`${WP_URL}/wp-json/wp/v2/posts?slug=${sourceSlug}`, { headers });
-        if (!postsResponse.ok) throw new Error(`Failed to fetch source post. Status: ${postsResponse.status}`);
+        const postsResponse = await fetch(`${WP_URL}/wp-json/wp/v2/posts?path=${sourceUrlPath}`, { headers });
+         if (!postsResponse.ok) throw new Error(`Failed to fetch source post. Status: ${postsResponse.status}`);
         
         const posts = await postsResponse.json();
         if (!posts || posts.length === 0) {
-          throw new Error(`Source post with slug '${sourceSlug}' not found.`);
+          throw new Error(`Source post with path '${sourceUrlPath}' not found.`);
         }
         const sourcePost = posts[0];
 
