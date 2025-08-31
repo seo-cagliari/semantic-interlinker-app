@@ -99,8 +99,12 @@ export async function interlinkFlow(options: {
           },
       });
 
-      const jsonText = response.text.trim();
-      const report: Report = JSON.parse(jsonText);
+      const jsonText = response.text;
+      if (!jsonText) {
+        throw new Error("Received an empty or invalid response from the Gemini API.");
+      }
+      
+      const report: Report = JSON.parse(jsonText.trim());
 
       // Post-process to ensure data consistency
       report.site = options.site_root;
