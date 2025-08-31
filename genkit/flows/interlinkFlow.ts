@@ -1,12 +1,13 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Report, ThematicCluster } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion } from '../../types';
 import { wp } from '../tools/wp';
 
 export async function interlinkFlow(options: {
   site_root: string;
   date_range?: string;
-  maxSuggestionsPerPage?: number;
+  maxSuggestions?: number;
   scoreThreshold?: number;
   applyDraft: boolean;
 }): Promise<Report> {
@@ -101,7 +102,7 @@ export async function interlinkFlow(options: {
     ${allSiteUrls.join('\n')}
 
     Per ogni suggerimento, fornisci un URL di origine, un URL di destinazione, un anchor text proposto con varianti, un suggerimento preciso per l'inserimento, una motivazione semantica e dei controlli di rischio.
-    Genera un numero realistico di suggerimenti, tra 3 e 7.
+    Genera ${options.maxSuggestions} suggerimenti.
     Il punteggio deve essere un numero decimale tra 0.5 e 0.95.
 
     IMPORTANTE: Fornisci tutti gli output testuali, inclusa la motivazione, in lingua italiana.
@@ -110,9 +111,6 @@ export async function interlinkFlow(options: {
   const suggestionSchema: any = {
     type: Type.OBJECT,
     properties: {
-        site: { type: Type.STRING },
-        generated_at: { type: Type.STRING },
-        summary: { /* Omitted for brevity, will be populated later */ },
         suggestions: {
             type: Type.ARRAY,
             items: {
@@ -149,6 +147,7 @@ export async function interlinkFlow(options: {
     required: ["suggestions"]
   };
   
+  let reportSuggestions: any[] = [];
   try {
       const response = await ai.models.generateContent({
           model: "gemini-2.5-flash",
@@ -166,25 +165,88 @@ export async function interlinkFlow(options: {
       }
       
       const suggestionData = JSON.parse(responseText.trim());
-      
-      const finalReport: Report = {
-        site: options.site_root,
-        generated_at: new Date().toISOString(),
-        thematic_clusters: thematicClusters,
-        suggestions: suggestionData.suggestions,
-        summary: {
-            pages_scanned: allSiteUrls.length,
-            indexable_pages: allSiteUrls.length,
-            suggestions_total: suggestionData.suggestions.length,
-            high_priority: suggestionData.suggestions.filter((s: any) => s.score >= 0.75).length,
-        }
-      };
-      
-      console.log("Phase 2 complete. Analysis finished.");
-      return finalReport;
+      reportSuggestions = suggestionData.suggestions;
+      console.log(`Phase 2 complete. Generated ${reportSuggestions.length} linking suggestions.`);
 
   } catch(e) {
       console.error("Error during Strategic Linking phase:", e);
       throw new Error("Failed to generate linking suggestions from Gemini API.");
   }
+
+  // PHASE 3: CONTENT GAP ANALYSIS
+  console.log("Starting Phase 3: Content Gap Analysis...");
+  const contentGapPrompt = `
+    Agisci come un SEO Content Strategist di livello mondiale per il sito "${options.site_root}".
+    L'analisi del sito ha rivelato i seguenti cluster tematici principali:
+    ${JSON.stringify(thematicClusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+
+    Basandoti su questa struttura, identifica le lacune di contenuto. Quali articoli o argomenti mancano per rendere ogni cluster più completo e autorevole?
+    Suggerisci 3-5 nuovi articoli strategici da scrivere. Per ogni suggerimento, fornisci:
+    1.  Un titolo accattivante e ottimizzato per la SEO.
+    2.  Una breve descrizione (1-2 frasi) che spieghi l'argomento e il suo valore per l'utente.
+    3.  Il nome esatto del cluster tematico a cui questo nuovo contenuto appartiene.
+
+    Fornisci la risposta in lingua italiana.
+  `;
+  
+  const contentGapSchema = {
+    type: Type.OBJECT,
+    properties: {
+      content_gap_suggestions: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            relevant_cluster: { type: Type.STRING }
+          },
+          required: ["title", "description", "relevant_cluster"]
+        }
+      }
+    },
+    required: ["content_gap_suggestions"]
+  };
+
+  let contentGapSuggestions: ContentGapSuggestion[] = [];
+  try {
+      const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: contentGapPrompt,
+          config: {
+              responseMimeType: "application/json",
+              responseSchema: contentGapSchema,
+              seed: 42,
+          },
+      });
+
+      const responseText = response.text;
+      if (responseText) {
+          const gapData = JSON.parse(responseText.trim());
+          contentGapSuggestions = gapData.content_gap_suggestions;
+          console.log(`Phase 3 complete. Identified ${contentGapSuggestions.length} content opportunities.`);
+      } else {
+          console.warn("Received an empty response during content gap analysis. Skipping.");
+      }
+  } catch(e) {
+      console.error("Error during Content Gap Analysis phase:", e);
+      // Non bloccare l'intero report se questa fase fallisce
+  }
+  
+  const finalReport: Report = {
+    site: options.site_root,
+    generated_at: new Date().toISOString(),
+    thematic_clusters: thematicClusters,
+    suggestions: reportSuggestions,
+    content_gap_suggestions: contentGapSuggestions,
+    summary: {
+        pages_scanned: allSiteUrls.length,
+        indexable_pages: allSiteUrls.length,
+        suggestions_total: reportSuggestions.length,
+        high_priority: reportSuggestions.filter((s: any) => s.score >= 0.75).length,
+    }
+  };
+  
+  console.log("Analysis finished. Returning final report.");
+  return finalReport;
 }

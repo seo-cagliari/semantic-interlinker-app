@@ -5,6 +5,7 @@ import { Suggestion, Report, ThematicCluster } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
+import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon } from '../components/Icons';
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
@@ -39,6 +40,7 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
 
 const App: React.FC = () => {
   const [siteUrl, setSiteUrl] = useState<string>('');
+  const [maxSuggestions, setMaxSuggestions] = useState<number>(7);
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,11 @@ const App: React.FC = () => {
         const apiResponse = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ site_root: siteUrl, scoreThreshold: 0.6 })
+          body: JSON.stringify({ 
+            site_root: siteUrl, 
+            scoreThreshold: 0.6,
+            maxSuggestions: maxSuggestions 
+          })
         });
         
         if (!apiResponse.ok) {
@@ -80,7 +86,7 @@ const App: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [siteUrl]);
+  }, [siteUrl, maxSuggestions]);
   
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
@@ -143,36 +149,53 @@ const App: React.FC = () => {
 
         <main>
           {!report && !isLoading && (
-            <div className="text-center py-16 max-w-2xl mx-auto">
+            <div className="text-center py-12 max-w-3xl mx-auto">
               <DocumentTextIcon className="w-16 h-16 mx-auto text-slate-300 mb-4" />
               <h2 className="text-xl font-semibold mb-2">Pronto a ottimizzare la struttura del tuo sito?</h2>
               <p className="text-slate-500 mb-6">Inserisci l'URL del tuo sito WordPress per avviare l'analisi semantica e trovare opportunità di link interni ad alto impatto.</p>
-              <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                  <input 
-                      type="url"
-                      value={siteUrl}
-                      onChange={(e) => {
-                          setSiteUrl(e.target.value);
-                          if (error) setError(null);
-                      }}
-                      placeholder="https://your-wordpress-site.com"
-                      className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                  />
-                  <button
-                      onClick={handleStartAnalysis}
-                      disabled={!siteUrl}
-                      className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                      <LinkIcon className="w-5 h-5" />
-                      Analizza Sito
-                  </button>
-              </div>
-              {error && 
-                <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
-                  <XCircleIcon className="w-5 h-5" />
-                  <p className="text-sm">{error}</p>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <input 
+                        type="url"
+                        value={siteUrl}
+                        onChange={(e) => {
+                            setSiteUrl(e.target.value);
+                            if (error) setError(null);
+                        }}
+                        placeholder="https://your-wordpress-site.com"
+                        className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    />
+                    <button
+                        onClick={handleStartAnalysis}
+                        disabled={!siteUrl}
+                        className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        <LinkIcon className="w-5 h-5" />
+                        Analizza Sito
+                    </button>
                 </div>
-              }
+                 {error && 
+                  <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
+                    <XCircleIcon className="w-5 h-5" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                }
+                <div className="mt-6">
+                  <label htmlFor="maxSuggestions" className="block text-sm font-medium text-slate-600 mb-2">
+                    Numero massimo di suggerimenti: <span className="font-bold text-blue-600">{maxSuggestions}</span>
+                  </label>
+                  <input
+                    id="maxSuggestions"
+                    type="range"
+                    min="5"
+                    max="20"
+                    value={maxSuggestions}
+                    onChange={(e) => setMaxSuggestions(parseInt(e.target.value, 10))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -206,6 +229,9 @@ const App: React.FC = () => {
                   </div>
                 ))}
               </div>
+               {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+              )}
             </>
           )}
         </main>

@@ -1,4 +1,5 @@
 
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -47,11 +48,18 @@ export type ThematicCluster = {
   pages: string[];
 };
 
+export type ContentGapSuggestion = {
+  title: string;
+  description: string;
+  relevant_cluster: string;
+};
+
 export type Report = {
   site: string;
   generated_at: string;
   summary: ReportSummary;
   thematic_clusters: ThematicCluster[];
   suggestions: Suggestion[];
+  content_gap_suggestions: ContentGapSuggestion[];
   notes?: string;
 };
