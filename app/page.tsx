@@ -1,6 +1,9 @@
 
 'use client';
 
+// FORCE COMMIT: This comment is added to force the git system to recognize a change
+// and push the entire clean project structure to GitHub, overwriting the old state.
+
 import React, { useState, useCallback } from 'react';
 import { Suggestion, Report } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
