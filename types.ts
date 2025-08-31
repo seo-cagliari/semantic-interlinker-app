@@ -36,10 +36,22 @@ export type ReportSummary = {
   high_priority: number;
 };
 
+export type PageEntry = {
+  url: string;
+  title: string;
+};
+
+export type ThematicCluster = {
+  cluster_name: string;
+  cluster_description: string;
+  pages: string[];
+};
+
 export type Report = {
   site: string;
   generated_at: string;
   summary: ReportSummary;
+  thematic_clusters: ThematicCluster[];
   suggestions: Suggestion[];
   notes?: string;
 };

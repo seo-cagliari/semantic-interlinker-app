@@ -1,11 +1,41 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Suggestion, Report } from '../types';
+import { Suggestion, Report, ThematicCluster } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon } from '../components/Icons';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon } from '../components/Icons';
+
+const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
+  <div className="mb-12">
+    <div className="flex items-center gap-3 mb-4">
+      <FolderIcon className="w-8 h-8 text-slate-500" />
+      <h2 className="text-2xl font-bold text-slate-800">Mappa Tematica del Sito</h2>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {clusters.map((cluster, index) => (
+        <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+          <h3 className="font-bold text-slate-900 mb-2">{cluster.cluster_name}</h3>
+          <p className="text-sm text-slate-600 mb-4">{cluster.cluster_description}</p>
+          <div className="border-t border-slate-200 pt-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Pagine nel cluster</h4>
+            <ul className="space-y-1">
+              {cluster.pages.slice(0, 5).map((page, pageIndex) => (
+                <li key={pageIndex} className="text-sm text-blue-600 truncate">
+                  <a href={page} target="_blank" rel="noopener noreferrer" className="hover:underline" title={page}>
+                    {page.split('/').filter(Boolean).pop() || page}
+                  </a>
+                </li>
+              ))}
+              {cluster.pages.length > 5 && <li className="text-xs text-slate-400 mt-1">...e altre {cluster.pages.length - 5}</li>}
+            </ul>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const App: React.FC = () => {
   const [siteUrl, setSiteUrl] = useState<string>('');
@@ -13,15 +43,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
-  // State for JSON data modal
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
   
-  // State for the new modification modal
   const [isModificationModalOpen, setIsModificationModalOpen] = useState<boolean>(false);
   const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
 
-  // State for managing selected suggestions for user tracking
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
 
   const handleStartAnalysis = useCallback(async () => {
@@ -80,7 +107,7 @@ const App: React.FC = () => {
   const renderSummary = () => {
     if (!report) return null;
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 text-center">
         <div className="bg-slate-100 p-4 rounded-lg">
           <p className="text-sm text-slate-500">Pagine Scansite</p>
           <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
@@ -153,23 +180,30 @@ const App: React.FC = () => {
              <div className="text-center py-16 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
                 <h2 className="text-xl font-semibold mb-2">Analisi di {siteUrl} in corso...</h2>
-                <p className="text-slate-500">Scansione delle pagine, analisi semantica e identificazione delle opportunità.</p>
+                <p className="text-slate-500">Scansione delle pagine, creazione mappa tematica e generazione suggerimenti.</p>
              </div>
           )}
 
           {report && (
             <>
               {renderSummary()}
+              {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
+              
+              <div className="flex items-center gap-3 mb-4 mt-8">
+                <LinkIcon className="w-8 h-8 text-slate-500" />
+                <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento</h2>
+              </div>
               <div className="space-y-6">
-                {report.suggestions.map((suggestion) => (
-                  <SuggestionCard
-                    key={suggestion.suggestion_id}
-                    suggestion={suggestion}
-                    isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
-                    onViewJson={handleViewJson}
-                    onViewModification={handleViewModification}
-                    onToggleSelection={handleToggleSelection}
-                  />
+                {report.suggestions.map((suggestion, index) => (
+                  <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                    <SuggestionCard
+                      suggestion={suggestion}
+                      isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
+                      onViewJson={handleViewJson}
+                      onViewModification={handleViewModification}
+                      onToggleSelection={handleToggleSelection}
+                    />
+                  </div>
                 ))}
               </div>
             </>
