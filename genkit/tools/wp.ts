@@ -1,4 +1,4 @@
-
+import { GoogleGenAI } from "@google/genai";
 import { Suggestion } from '../../types';
 // FIX: Import Buffer to resolve 'Cannot find name 'Buffer'' TypeScript error.
 import { Buffer } from 'buffer';
@@ -84,6 +84,7 @@ export const wp = {
     const WP_URL = getEnv('WORDPRESS_URL').replace(/\/$/, '');
     const WP_USER = getEnv('WORDPRESS_USER');
     const WP_APP_PASSWORD = getEnv('WORDPRESS_APP_PASSWORD');
+    const API_KEY = getEnv('API_KEY');
 
     const headers = {
       'Content-Type': 'application/json',
@@ -92,13 +93,15 @@ export const wp = {
 
     let createdCount = 0;
     const errors: string[] = [];
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
     for (const suggestion of suggestions) {
       try {
         // 1. Find the source post ID from its URL
         const sourceUrlPath = new URL(suggestion.source_url).pathname;
         
-        const postsResponse = await fetch(`${WP_URL}/wp-json/wp/v2/posts?path=${sourceUrlPath}`, { headers });
+        // Fetching with more fields needed for draft creation
+        const postsResponse = await fetch(`${WP_URL}/wp-json/wp/v2/posts?slug=${sourceUrlPath.split('/').filter(Boolean).pop()}&_fields=id,title,content`, { headers });
          if (!postsResponse.ok) throw new Error(`Failed to fetch source post. Status: ${postsResponse.status}`);
         
         const posts = await postsResponse.json();
@@ -107,14 +110,46 @@ export const wp = {
         }
         const sourcePost = posts[0];
 
-        // 2. Prepare the new content with the interlink
+        // 2. Prepare the link HTML
         const linkHtml = `<a href="${suggestion.target_url}">${suggestion.proposed_anchor}</a>`;
         
-        // TODO: Implement a more sophisticated insertion logic based on suggestion.insertion_hint.
-        // For now, we append the link within a new paragraph at the end of the content for safety.
-        const newContent = `${sourcePost.content.rendered}\n\n<p>${linkHtml}</p>`;
+        // 3. PHASE 3.1: Intelligent Content Insertion
+        let newContent = '';
+        const insertionPrompt = `
+          You are an expert HTML editor. Your task is to surgically insert the following HTML link into the provided source HTML content.
+          The insertion must be natural, logical, and semantically relevant to the surrounding text.
+          Do not add any commentary, explanations, or markdown formatting like \`\`\`html.
+          Only return the full, valid, and updated HTML content.
 
-        // 3. Create a new post in 'draft' status with the modified content
+          LINK TO INSERT:
+          ${linkHtml}
+
+          SOURCE HTML CONTENT:
+          ${sourcePost.content.rendered}
+        `;
+
+        try {
+          console.log(`Requesting intelligent insertion for source post ${sourcePost.id}...`);
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: insertionPrompt,
+          });
+          
+          const modifiedHtml = response.text;
+          if (!modifiedHtml || !modifiedHtml.includes(linkHtml)) {
+              throw new Error("Gemini API did not return valid HTML or failed to include the link.");
+          }
+          newContent = modifiedHtml.trim();
+          console.log(`Successfully received intelligent insertion for source post ${sourcePost.id}.`);
+        
+        } catch (insertionError) {
+          console.error(`Intelligent insertion failed for suggestion ${suggestion.suggestion_id}. Falling back to simple append.`, insertionError);
+          // Fallback to the old, safe method if the AI fails
+          newContent = `${sourcePost.content.rendered}\n\n<p>${linkHtml}</p>`;
+        }
+
+
+        // 4. Create a new post in 'draft' status with the modified content
         const createDraftBody = {
           title: `[Draft] ${sourcePost.title.rendered}`,
           content: newContent,
