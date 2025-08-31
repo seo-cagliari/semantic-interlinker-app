@@ -1,23 +1,27 @@
-
 'use client';
-
-// FORCE COMMIT: This comment is added to force the git system to recognize a change
-// and push the entire clean project structure to GitHub, overwriting the old state.
 
 import React, { useState, useCallback } from 'react';
 import { Suggestion, Report } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, DocumentDuplicateIcon, XCircleIcon } from '../components/Icons';
+import { ModificationModal } from '../components/ModificationModal';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon } from '../components/Icons';
 
 const App: React.FC = () => {
   const [siteUrl, setSiteUrl] = useState<string>('');
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isDrafting, setIsDrafting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  
+  // State for JSON data modal
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
+  
+  // State for the new modification modal
+  const [isModificationModalOpen, setIsModificationModalOpen] = useState<boolean>(false);
+  const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
+
+  // State for managing selected suggestions for user tracking
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
 
   const handleStartAnalysis = useCallback(async () => {
@@ -31,7 +35,6 @@ const App: React.FC = () => {
     setSelectedSuggestions(new Set());
 
     try {
-        // This is now a real API call to the Next.js endpoint
         const apiResponse = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -52,56 +55,14 @@ const App: React.FC = () => {
     }
   }, [siteUrl]);
   
-  const createDrafts = useCallback(async (suggestionsToDraft: Suggestion[]) => {
-    if (suggestionsToDraft.length === 0) return;
-    setIsDrafting(true);
-    
-    try {
-        const apiResponse = await fetch('/api/draft', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ selectedSuggestions: suggestionsToDraft })
-        });
-        if (!apiResponse.ok) {
-           const errorData = await apiResponse.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
-           throw new Error(errorData.details || `Failed to create drafts`);
-        }
-        
-        const result = await apiResponse.json();
-        console.log("Drafts creation successful:", result);
-        
-        // On success, remove the drafted suggestions from the selection
-        setSelectedSuggestions(prev => {
-            const newSet = new Set(prev);
-            suggestionsToDraft.forEach(s => newSet.delete(s.suggestion_id));
-            return newSet;
-        });
-        alert(`Successfully created ${suggestionsToDraft.length} draft(s) in WordPress.`);
-    } catch (err) {
-        const message = err instanceof Error ? err.message : "An unknown error occurred.";
-        alert(`Error creating drafts: ${message}`);
-    } finally {
-        setIsDrafting(false);
-    }
-  }, []);
-  
-  const handleCreateDraft = useCallback((suggestionId: string) => {
-    const suggestion = report?.suggestions.find(s => s.suggestion_id === suggestionId);
-    if (suggestion) {
-        createDrafts([suggestion]);
-    }
-  }, [createDrafts, report]);
-  
-  const handleBulkCreateDraft = useCallback(() => {
-    const suggestionsToDraft = report?.suggestions.filter(
-        s => selectedSuggestions.has(s.suggestion_id)
-    ) || [];
-    createDrafts(suggestionsToDraft);
-  }, [createDrafts, selectedSuggestions, report]);
-
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
-    setIsModalOpen(true);
+    setIsJsonModalOpen(true);
+  }, []);
+
+  const handleViewModification = useCallback((suggestion: Suggestion) => {
+    setCurrentSuggestion(suggestion);
+    setIsModificationModalOpen(true);
   }, []);
 
   const handleToggleSelection = useCallback((suggestionId: string) => {
@@ -153,7 +114,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="pb-24">
+        <main>
           {!report && !isLoading && (
             <div className="text-center py-16 max-w-2xl mx-auto">
               <DocumentTextIcon className="w-16 h-16 mx-auto text-slate-300 mb-4" />
@@ -206,7 +167,7 @@ const App: React.FC = () => {
                     suggestion={suggestion}
                     isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
                     onViewJson={handleViewJson}
-                    onCreateDraft={handleCreateDraft}
+                    onViewModification={handleViewModification}
                     onToggleSelection={handleToggleSelection}
                   />
                 ))}
@@ -216,26 +177,15 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {report && selectedSuggestions.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-t border-slate-200 shadow-lg z-10 animate-fade-in-up">
-            <div className="container mx-auto p-4 flex justify-between items-center">
-                <p className="font-semibold text-slate-700">{selectedSuggestions.size} suggestion(s) selected.</p>
-                <button 
-                    onClick={handleBulkCreateDraft}
-                    disabled={isDrafting}
-                    className="bg-slate-900 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center gap-2"
-                >
-                    {isDrafting ? <LoadingSpinnerIcon className="w-5 h-5" /> : <DocumentDuplicateIcon className="w-5 h-5" />}
-                    Create {selectedSuggestions.size} Drafts
-                </button>
-            </div>
-        </div>
-      )}
-
       <JsonModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isJsonModalOpen}
+        onClose={() => setIsJsonModalOpen(false)}
         jsonString={selectedSuggestionJson}
+      />
+      <ModificationModal 
+        isOpen={isModificationModalOpen}
+        onClose={() => setIsModificationModalOpen(false)}
+        suggestion={currentSuggestion}
       />
     </div>
   );
