@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Report, ThematicCluster, ContentGapSuggestion } from '../../types';
 import { wp } from '../tools/wp';
@@ -70,29 +69,54 @@ export async function interlinkFlow(options: {
   };
 
   let thematicClusters: ThematicCluster[] = [];
-  try {
-    const clusterResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: clusterPrompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: clusterSchema,
-            seed: 42,
-        },
-    });
+  const maxRetries = 2;
+  let attempt = 0;
 
-    const responseText = clusterResponse.text;
-    if (!responseText) {
-        throw new Error("Received an empty text response from Gemini during thematic clustering.");
+  while (attempt < maxRetries) {
+    try {
+        const clusterResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: clusterPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: clusterSchema,
+                seed: 42,
+            },
+        });
+
+        const responseText = clusterResponse.text;
+        if (!responseText) {
+            throw new Error("Received an empty text response from Gemini during thematic clustering.");
+        }
+
+        const clusterJson = JSON.parse(responseText.trim());
+        if (!clusterJson.thematic_clusters || clusterJson.thematic_clusters.length === 0) {
+             throw new Error("Gemini API returned a valid JSON but without thematic clusters.");
+        }
+
+        thematicClusters = clusterJson.thematic_clusters;
+        console.log(`Phase 1 complete. Identified ${thematicClusters.length} thematic clusters.`);
+        break; // Success, exit the loop
+    } catch (e) {
+        attempt++;
+        console.error(`Error during Thematic Clustering phase (Attempt ${attempt}/${maxRetries}):`, e);
+
+        if (attempt >= maxRetries) {
+            const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+            const finalErrorMessage = `Failed to generate thematic clusters after ${maxRetries} attempts. Last error: ${detailedError}`;
+            throw new Error(finalErrorMessage);
+        }
+        
+        console.log(`Retrying thematic clustering...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
     }
-
-    const clusterJson = JSON.parse(responseText.trim());
-    thematicClusters = clusterJson.thematic_clusters;
-    console.log(`Phase 1 complete. Identified ${thematicClusters.length} thematic clusters.`);
-  } catch (e) {
-    console.error("Error during Thematic Clustering phase:", e);
-    throw new Error("Failed to generate thematic clusters from Gemini API.");
   }
+
+  if (thematicClusters.length === 0) {
+      // This check is crucial in case the loop finishes without populating the clusters
+      throw new Error("Failed to generate thematic clusters after all retries.");
+  }
+
 
   // PHASE 2: STRATEGIC LINKING
   console.log("Starting Phase 2: Strategic Linking...");
