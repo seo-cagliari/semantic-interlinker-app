@@ -1,3 +1,4 @@
+
 import { Suggestion } from '../../types';
 // FIX: Import Buffer to resolve 'Cannot find name 'Buffer'' TypeScript error.
 import { Buffer } from 'buffer';
