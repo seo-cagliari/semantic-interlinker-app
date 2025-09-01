@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Report } from '../types';
@@ -35,9 +36,10 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // Semplifichiamo il ref per evitare conflitti di tipo complessi.
-    // FIX: Initialize useRef with null to satisfy TypeScript's requirement for an initial value.
-    const fgRef = useRef<ForceGraphMethods | null>(null);
+    // SOLUZIONE DEFINITIVA: Inizializziamo il ref senza argomenti per renderlo `undefined`
+    // e compatibile con i tipi restrittivi della libreria.
+    // FIX: Provide `undefined` as an initial value to `useRef` to fix the "Expected 1 arguments, but got 0" error. This maintains the intended `undefined` initial value.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -141,9 +143,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 </div>
             </div>
             
-            {/* SOLUZIONE DEFINITIVA: Usiamo `as any` per superare i tipi restrittivi della libreria */}
             <ForceGraph2D
-                ref={fgRef as any}
+                ref={fgRef}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -179,7 +180,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 linkColor={getLinkColor}
                 linkDirectionalParticles={link => highlightLinks.has(link as MyLink) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
-                linkDirectionalParticleSpeed={() => 0.006}
+                linkDirectionalParticleSpeed={_ => 0.006}
                 onNodeClick={handleNodeClick as (node: NodeObject) => void}
                 onBackgroundClick={handleBackgroundClick}
             />
