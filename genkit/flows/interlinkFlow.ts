@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../../types';
 import { wp } from '../tools/wp';
 
 /**
@@ -311,6 +311,7 @@ export async function interlinkFlow(options: {
 export async function deepAnalysisFlow(options: {
   pageUrl: string;
   pageDiagnostics: PageDiagnostic[];
+  gscData?: GscDataRow[];
 }): Promise<DeepAnalysisReport> {
   console.log(`Starting deep analysis for ${options.pageUrl}`);
 
@@ -326,43 +327,67 @@ export async function deepAnalysisFlow(options: {
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
+  const hasGscData = options.gscData && options.gscData.length > 0;
+  const gscDataString = hasGscData 
+    ? `Inoltre, hai accesso ai seguenti dati reali di performance da Google Search Console. Sfruttali per guidare i tuoi suggerimenti.
+      'query', 'pagina', 'impressioni', 'ctr'
+      ${options.gscData?.map(row => `"${row.keys[0]}", "${row.keys[1]}", ${row.impressions}, ${row.ctr}`).join('\n')}
+    `
+    : "Non sono stati forniti dati da Google Search Console.";
+
   const deepAnalysisPrompt = `
-    Agisci come un SEO Architect di livello mondiale. Il tuo compito è analizzare in profondità una singola pagina per ottimizzare la sua rete di link interni e il suo contenuto, tenendo conto dell'autorità interna di ogni pagina.
+    Agisci come un SEO Strategist di livello mondiale, esperto nell'uso dei dati per guidare le decisioni. Il tuo compito è analizzare in profondità una singola pagina per ottimizzare la sua rete di link interni e il suo contenuto.
 
-    Pagina da analizzare: ${options.pageUrl}
-    Punteggio di Autorità Interna di questa pagina: ${analyzedPageDiagnostic.internal_authority_score.toFixed(2)}/10
-    (Un punteggio alto indica una pagina importante con molti link interni; un punteggio basso indica una pagina più isolata).
+    PAGINA DA ANALIZZARE: ${options.pageUrl}
+    Punteggio di Autorità Interna: ${analyzedPageDiagnostic.internal_authority_score.toFixed(2)}/10
 
-    Contesto: Questo è l'elenco di tutte le altre pagine del sito con i loro punteggi di autorità.
-    ${options.pageDiagnostics.filter(p => p.url !== options.pageUrl).map(p => `[Score: ${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+    DATI DISPONIBILI:
+    1.  Contenuto della pagina (primi 8000 caratteri):
+        ---
+        ${pageContent.substring(0, 8000)} 
+        ---
+    2.  Mappa del sito con punteggi di autorità:
+        ${options.pageDiagnostics.filter(p => p.url !== options.pageUrl).map(p => `[Score: ${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+    3.  Dati di Google Search Console (GSC):
+        ${gscDataString}
 
-    Contenuto della pagina (testo pulito):
-    ---
-    ${pageContent.substring(0, 8000)} 
-    ---
+    IL TUO COMPITO:
+    Basandoti sull'analisi combinata di contenuto, autorità interna e dati GSC, genera un report JSON.
 
-    Basandoti sull'analisi semantica del contenuto, genera un report JSON con tre sezioni. Considera i punteggi di autorità:
-    - Per i 'inbound_links', suggerisci link da pagine con un punteggio di autorità ALTO per potenziare questa pagina se il suo punteggio è basso.
-    - Per gli 'outbound_links', suggerisci link da questa pagina verso pagine rilevanti, specialmente se questa pagina ha un'autorità alta da poter 'prestare'.
-
-    1.  'inbound_links': Suggerisci un elenco di 3-5 pagine dall'elenco di contesto che dovrebbero collegarsi a questa pagina.
-    2.  'outbound_links': Suggerisci un elenco di 2-4 link che questa pagina dovrebbe aggiungere verso altre pagine dell'elenco di contesto.
-    3.  'content_enhancements': Suggerisci 2-3 miglioramenti concreti per il contenuto della pagina analizzata.
+    ISTRUZIONI STRATEGICHE:
+    - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR relative alla pagina analizzata. Queste sono le tue priorità.
+    - LINK IN ENTRATA (inbound_links):
+        - Se hai dati GSC, trova altre pagine del sito che rankano per query simili o correlate alle "query opportunità". Suggerisci link DA queste pagine, usando le "query opportunità" come anchor text.
+        - In assenza di dati GSC, suggerisci link da pagine con ALTA autorità interna per potenziare la pagina analizzata.
+        - Per ogni suggerimento, includi il campo 'driving_query' se è basato su dati GSC.
+    - LINK IN USCITA (outbound_links): Suggerisci link da questa pagina verso altre pagine rilevanti per arricchire il contesto e distribuire autorità.
+    - MIGLIORAMENTI DEL CONTENUTO (content_enhancements): Suggerisci modifiche al testo che incorporino le "query opportunità" o che migliorino la risposta all'intento di ricerca.
 
     REGOLE CRITICHE:
-    - Tutti gli URL suggeriti DEVONO provenire dall'elenco di contesto.
-    - Tutte le risposte testuali devono essere in lingua italiana.
-    - La risposta DEVE essere un oggetto JSON valido.
+    - La risposta DEVE essere un oggetto JSON valido in lingua italiana.
+    - Tutti gli URL suggeriti DEVONO provenire dall'elenco di pagine del sito.
   `;
 
   const deepAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
+        opportunity_queries: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: { query: { type: Type.STRING }, impressions: { type: Type.NUMBER }, ctr: { type: Type.NUMBER } },
+          }
+        },
         inbound_links: {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
-                properties: { source_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING } },
+                properties: { 
+                  source_url: { type: Type.STRING }, 
+                  proposed_anchor: { type: Type.STRING }, 
+                  semantic_rationale: { type: Type.STRING },
+                  driving_query: { type: Type.STRING },
+                },
             }
         },
         outbound_links: {

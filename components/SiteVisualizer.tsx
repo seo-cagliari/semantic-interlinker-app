@@ -33,8 +33,9 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize useRef with null. This is a standard pattern for component refs and provides the expected argument, fixing the error.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
+    // FIX: The `useRef` hook requires an initial value. For component refs, `null` is the standard.
+    // Also, adding the correct type to the ref allows us to remove `as any` from the component's `ref` prop.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | null>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -77,10 +78,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            // FIX: Add a null check for link.source and link.target before accessing properties.
-            // `typeof null` is 'object', so the original code could throw a runtime error. This fixes the "possibly 'null'" error.
-            const sourceId = typeof link.source === 'object' && link.source ? (link.source as MyNode).id : link.source;
-            const targetId = typeof link.target === 'object' && link.target ? (link.target as MyNode).id : link.target;
+            const sourceId = typeof link.source === 'object' && link.source ? (link.source as MyNode).id : link.source as string;
+            const targetId = typeof link.target === 'object' && link.target ? (link.target as MyNode).id : link.target as string;
 
             if (sourceId === clickedNode.id || targetId === clickedNode.id) {
                 newHighlightLinks.add(link);
@@ -140,7 +139,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef as any} // Using 'as any' here to bypass the strict ref type checking which is the source of the issue.
+                ref={fgRef}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {

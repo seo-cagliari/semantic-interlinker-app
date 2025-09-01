@@ -1,5 +1,6 @@
 
 
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -54,12 +55,27 @@ export type ContentGapSuggestion = {
   relevant_cluster: string;
 };
 
+// --- Tipi per l'integrazione GSC ---
+export type GscSite = {
+  siteUrl: string;
+  permissionLevel: string;
+};
+
+export type GscDataRow = {
+  keys: string[]; // [query, page]
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+};
+
 // --- Tipi per l'Analisi Approfondita ---
 
 export type InboundLinkSuggestion = {
   source_url: string;
   proposed_anchor: string;
   semantic_rationale: string;
+  driving_query?: string; // Query GSC che ha motivato il suggerimento
 };
 
 export type OutboundLinkSuggestion = {
@@ -79,6 +95,7 @@ export type DeepAnalysisReport = {
   inbound_links: InboundLinkSuggestion[];
   outbound_links: OutboundLinkSuggestion[];
   content_enhancements: ContentEnhancementSuggestion[];
+  opportunity_queries?: { query: string; impressions: number; ctr: number }[];
 };
 
 // --- Tipo per la diagnostica della pagina e l'autorità ---

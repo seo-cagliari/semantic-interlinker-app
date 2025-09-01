@@ -1,6 +1,6 @@
 import React from 'react';
 import { DeepAnalysisReport } from '../types';
-import { ArrowDownLeftIcon, ArrowUpRightIcon, SparklesIcon, LinkIcon } from './Icons';
+import { ArrowDownLeftIcon, ArrowUpRightIcon, SparklesIcon, ChartBarIcon } from './Icons';
 
 interface DeepAnalysisReportDisplayProps {
   report: DeepAnalysisReport;
@@ -22,6 +22,23 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
         </div>
       </div>
       
+      {report.opportunity_queries && report.opportunity_queries.length > 0 && (
+        <div className="mb-8 p-5 rounded-xl border border-blue-200 bg-blue-50">
+           <div className="flex items-center gap-3 mb-2">
+            <ChartBarIcon className="w-7 h-7 text-blue-500" />
+            <h3 className="text-xl font-semibold text-slate-900">Opportunità dai Dati di Ricerca (GSC)</h3>
+          </div>
+          <p className="text-sm text-blue-700 mb-4">L'AI ha identificato queste query con alte impressioni ma basso CTR come opportunità per migliorare i contenuti e il linking.</p>
+          <div className="flex flex-wrap gap-2">
+            {report.opportunity_queries.map((q, i) => (
+                <div key={i} className="bg-white text-xs text-slate-700 px-2 py-1 rounded-md border border-slate-200">
+                    <span className="font-semibold text-blue-800">"{q.query}"</span> (Imp: {q.impressions.toLocaleString()}, CTR: {(q.ctr * 100).toFixed(2)}%)
+                </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* INBOUND LINKS */}
@@ -38,6 +55,11 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
                   DA: <a href={link.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{link.source_url}</a>
                 </p>
                 <p className="font-semibold text-slate-800">Anchor: <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{link.proposed_anchor}</span></p>
+                {link.driving_query && (
+                    <p className="text-xs text-slate-500 mt-2">
+                        <span className="font-semibold">Query GSC:</span> "{link.driving_query}"
+                    </p>
+                )}
                 <p className="text-xs text-slate-600 mt-2 italic">"{link.semantic_rationale}"</p>
               </div>
             ))}

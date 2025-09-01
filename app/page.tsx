@@ -2,17 +2,17 @@
 
 import React, { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic } from '../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
+import { GscConnect } from '../components/GscConnect';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon } from '../components/Icons';
 
 type ViewMode = 'report' | 'visualizer';
 
-// Dynamically import the SiteVisualizer component to ensure it's only loaded on the client-side
 const SiteVisualizer = dynamic(
   () => import('../components/SiteVisualizer').then(mod => mod.SiteVisualizer),
   { 
@@ -27,7 +27,6 @@ const SiteVisualizer = dynamic(
     )
   }
 );
-
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
   <div className="mb-12">
@@ -61,7 +60,7 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
 
 const App: React.FC = () => {
   const [siteUrl, setSiteUrl] = useState<string>('');
-  const [maxSuggestions, setMaxSuggestions] = useState<number>(8);
+  const [maxSuggestions, setMaxSuggestions] = useState<number>(10);
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +78,6 @@ const App: React.FC = () => {
   const [deepAnalysisReport, setDeepAnalysisReport] = useState<DeepAnalysisReport | null>(null);
   const [isDeepLoading, setIsDeepLoading] = useState<boolean>(false);
   const [deepError, setDeepError] = useState<string | null>(null);
-
 
   const handleStartAnalysis = useCallback(async () => {
     if (!siteUrl || !/^(https?:\/\/)/.test(siteUrl)) {
@@ -124,7 +122,7 @@ const App: React.FC = () => {
     }
   }, [siteUrl, maxSuggestions]);
 
-  const handleDeepAnalysis = useCallback(async () => {
+  const handleDeepAnalysis = useCallback(async (gscData?: GscDataRow[]) => {
     if (!selectedDeepAnalysisUrl || !report?.page_diagnostics) {
       setDeepError("Seleziona una pagina da analizzare.");
       return;
@@ -139,7 +137,8 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pageUrl: selectedDeepAnalysisUrl,
-          pageDiagnostics: report.page_diagnostics
+          pageDiagnostics: report.page_diagnostics,
+          gscData: gscData
         })
       });
 
@@ -273,7 +272,7 @@ const App: React.FC = () => {
                 }
                 <div className="mt-6">
                   <label htmlFor="maxSuggestions" className="block text-sm font-medium text-slate-600 mb-2">
-                    Numero massimo di suggerimenti: <span className="font-bold text-blue-600">{maxSuggestions}</span>
+                    Numero massimo di suggerimenti (globali): <span className="font-bold text-blue-600">{maxSuggestions}</span>
                   </label>
                   <input
                     id="maxSuggestions"
@@ -307,43 +306,20 @@ const App: React.FC = () => {
                 <>
                   {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
                   
-                  <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
-                    <p className="text-slate-600 mb-4">Seleziona una pagina per analizzarne il contenuto e ricevere suggerimenti specifici su link interni e miglioramenti.</p>
-                    <div className="flex flex-col sm:flex-row gap-2 items-center">
-                      <select
-                        value={selectedDeepAnalysisUrl}
-                        onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-                      >
-                        {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
-                            <option key={page.url} value={page.url}>
-                              [{page.internal_authority_score.toFixed(1)}] - {page.title}
-                            </option>
-                        )}
-                      </select>
-                      <button
-                        onClick={handleDeepAnalysis}
-                        disabled={isDeepLoading}
-                        className="w-full sm:w-auto bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
-                      >
-                        {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
-                        Analisi Dettagliata
-                      </button>
-                    </div>
-                    {deepError && 
-                      <div className="mt-4 flex items-center gap-2 text-red-600">
-                        <XCircleIcon className="w-5 h-5" />
-                        <p className="text-sm">{deepError}</p>
-                      </div>
-                    }
-                  </div>
+                  <GscConnect
+                    report={report}
+                    selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
+                    setSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
+                    onAnalyze={handleDeepAnalysis}
+                    isDeepLoading={isDeepLoading}
+                    deepError={deepError}
+                  />
 
-                  {isDeepLoading && (
+                  {isDeepLoading && !deepAnalysisReport && (
                     <div className="text-center py-12 flex flex-col items-center">
                       <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
                       <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
-                      <p className="text-slate-500 max-w-md">Sto leggendo il contenuto della pagina e generando suggerimenti per link inbound, outbound e miglioramenti testuali.</p>
+                      <p className="text-slate-500 max-w-md">Sto leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
                     </div>
                   )}
 
