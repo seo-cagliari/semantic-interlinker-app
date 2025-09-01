@@ -33,9 +33,8 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: `useRef` con un argomento di tipo generico richiede un valore iniziale.
-    // L'inizializzazione con `null` è l'approccio standard per i ref dei componenti.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
+    // Fix: The no-argument call to useRef() caused a runtime error. Explicitly passing `undefined` is the correct way to initialize the ref.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -142,7 +141,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef}
+                ref={fgRef as any}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
