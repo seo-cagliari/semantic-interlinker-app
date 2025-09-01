@@ -33,9 +33,9 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: The `useRef` hook requires an initial value. For component refs, `null` is the standard.
-    // Also, adding the correct type to the ref allows us to remove `as any` from the component's `ref` prop.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | null>(null);
+    // FIX: `useRef` con un argomento di tipo generico richiede un valore iniziale.
+    // L'inizializzazione con `null` è l'approccio standard per i ref dei componenti.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -78,8 +78,11 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            const sourceId = typeof link.source === 'object' && link.source ? (link.source as MyNode).id : link.source as string;
-            const targetId = typeof link.target === 'object' && link.target ? (link.target as MyNode).id : link.target as string;
+            // Controlliamo che source e target non siano null e siano oggetti prima di accedere a 'id'
+            const sourceObj = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode) : null;
+            const targetObj = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode) : null;
+            const sourceId = sourceObj ? sourceObj.id : link.source as string;
+            const targetId = targetObj ? targetObj.id : link.target as string;
 
             if (sourceId === clickedNode.id || targetId === clickedNode.id) {
                 newHighlightLinks.add(link);
