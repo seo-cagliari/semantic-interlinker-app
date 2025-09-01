@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-// FIX: Import the ForceGraph2D component, which is the default export of the library.
 import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
@@ -79,6 +78,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
+            // Safely access source and target, which can be objects or strings
             const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as MyNode).id : link.source as string;
             const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as MyNode).id : link.target as string;
 
@@ -152,6 +152,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
+                    // Ensure node has coordinates before drawing
                     if (myNode.x === undefined || myNode.y === undefined) return;
 
                     ctx.beginPath();
