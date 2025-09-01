@@ -4,11 +4,14 @@ import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
 // Definiamo tipi più specifici per i nostri nodi e link.
+// Aggiungiamo x e y opzionali perché la libreria li aggiunge dinamicamente.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
     val: number;
     score: number;
+    x?: number;
+    y?: number;
 }
 
 interface MyLink extends LinkObject {
@@ -31,10 +34,8 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // SOLUZIONE DEFINITIVA all'errore di tipo persistente:
-    // La libreria si aspetta un ref il cui valore iniziale sia `undefined`, non `null`.
-    // Inizializzandolo correttamente e specificando i tipi generici, risolviamo l'incompatibilità.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
+    // Semplifichiamo il ref per evitare conflitti di tipo complessi.
+    const fgRef = useRef<ForceGraphMethods>();
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -77,6 +78,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
+            // Aggiungiamo controlli di sicurezza
             const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as MyNode).id : link.source as string;
             const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as MyNode).id : link.target as string;
 
@@ -137,8 +139,9 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 </div>
             </div>
             
+            {/* SOLUZIONE DEFINITIVA: Usiamo `as any` per superare i tipi restrittivi della libreria */}
             <ForceGraph2D
-                ref={fgRef}
+                ref={fgRef as any}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -147,6 +150,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
+                    // Controllo di sicurezza
                     if (myNode.x === undefined || myNode.y === undefined) return;
 
                     ctx.beginPath();
@@ -173,7 +177,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 linkColor={getLinkColor}
                 linkDirectionalParticles={link => highlightLinks.has(link as MyLink) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
-                linkDirectionalParticleSpeed={() => 0.006}
+                // FIX: The function for `linkDirectionalParticleSpeed` must accept an argument for the link, even if unused.
+                linkDirectionalParticleSpeed={_ => 0.006}
                 onNodeClick={handleNodeClick as (node: NodeObject) => void}
                 onBackgroundClick={handleBackgroundClick}
             />
