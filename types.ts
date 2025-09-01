@@ -1,6 +1,3 @@
-
-
-
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
