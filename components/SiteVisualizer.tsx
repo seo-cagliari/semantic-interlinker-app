@@ -23,8 +23,8 @@ interface MyNode extends NodeObject {
 }
 
 interface MyLink extends LinkObject {
-    source: string;
-    target: string;
+    source: string | MyNode;
+    target: string | MyNode;
 }
 
 const colorPalette = [
@@ -38,9 +38,9 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // Inizializziamo il ref con il tipo corretto e 'undefined' come valore iniziale
+    // FIX DEFINITIVO: Inizializziamo il ref con 'undefined' come valore iniziale
     // per risolvere l'incompatibilità di tipo che causava l'errore di compilazione.
-    // FIX: Provide an explicit undefined initial value to useRef to support older TypeScript/React versions.
+    // FIX: The useRef hook requires an initial value. `undefined` is passed as the argument.
     const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
@@ -84,10 +84,8 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            const sourceObj = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode) : null;
-            const targetObj = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode) : null;
-            const sourceId = sourceObj ? sourceObj.id : link.source as string;
-            const targetId = targetObj ? targetObj.id : link.target as string;
+            const sourceId = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode).id : link.source as string;
+            const targetId = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode).id : link.target as string;
 
             if (sourceId === clickedNode.id || targetId === clickedNode.id) {
                 newHighlightLinks.add(link);
@@ -147,7 +145,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef}
+                ref={fgRef as React.MutableRefObject<ForceGraphMethods<NodeObject, LinkObject> | undefined>}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {

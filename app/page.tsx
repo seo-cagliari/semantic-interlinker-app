@@ -313,17 +313,9 @@ const App: React.FC = () => {
                 <>
                   {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
                   
-                  {renderDeepAnalysisSection()}
-
-                  {isDeepLoading && !deepAnalysisReport && (
-                    <div className="text-center py-12 flex flex-col items-center">
-                      <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
-                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
-                      <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
-                    </div>
+                  {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                    <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
                   )}
-
-                  {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
                   
                   <div className="flex items-center gap-3 mb-4 mt-16">
                     <LinkIcon className="w-8 h-8 text-slate-500" />
@@ -342,9 +334,18 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
-                    <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+
+                  {renderDeepAnalysisSection()}
+
+                  {isDeepLoading && !deepAnalysisReport && (
+                    <div className="text-center py-12 flex flex-col items-center">
+                      <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
+                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
+                      <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
+                    </div>
                   )}
+
+                  {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
                 </>
               )}
             </div>

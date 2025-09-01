@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion } from '../../types';
 import { wp } from '../tools/wp';
 
 /**
@@ -66,7 +66,7 @@ export async function interlinkFlow(options: {
   gscData?: GscDataRow[];
   applyDraft: boolean;
 }): Promise<Report> {
-  console.log("Real interlinkFlow triggered with options:", options);
+  console.log("Master Agent started with options:", options);
   if (!options.site_root) throw new Error("site_root is required for analysis.");
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -82,7 +82,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
 
 
   // PHASE 0: AUTHORITY CALCULATION
-  console.log("Starting Phase 0: Authority Calculation...");
+  console.log("Master Agent - Phase 0: Authority Calculation...");
   const allPagesWithContent = await wp.getAllPublishedPages(options.site_root);
   const internalLinksMap = await wp.getAllInternalLinksFromAllPages(options.site_root, allPagesWithContent);
   const pagesWithScores = calculateInternalAuthority(
@@ -95,7 +95,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
       title: p.title,
       internal_authority_score: p.score
   }));
-  console.log(`Phase 0 complete. Calculated authority for ${pageDiagnostics.length} pages.`);
+  console.log(`Master Agent - Phase 0 complete. Calculated authority for ${pageDiagnostics.length} pages.`);
 
   const allSiteUrls = pageDiagnostics.map(p => p.url);
   if (allSiteUrls.length === 0) {
@@ -103,7 +103,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   }
 
   // --- AGENT 1: INFORMATION ARCHITECT ---
-  console.log("Starting Agent 1: Information Architect...");
+  console.log("Master Agent deploying Agent 1: Information Architect...");
   const clusterPrompt = `
     Agisci come un architetto dell'informazione e un esperto SEO per il sito "${options.site_root}".
     Il tuo compito è analizzare la struttura del sito e i dati di performance per raggruppare gli URL in 3-6 cluster tematici.
@@ -155,7 +155,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   }
 
   // --- AGENT 2: SEMANTIC LINKING STRATEGIST ---
-  console.log("Starting Agent 2: Semantic Linking Strategist...");
+  console.log("Master Agent deploying Agent 2: Semantic Linking Strategist...");
   const suggestionPrompt = `
     Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}".
     
@@ -175,11 +175,63 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     - RAFFORZA I CLUSTER: Suggerisci link che rinforzino la coerenza dei cluster tematici.
     - Fornisci tutti gli output testuali, inclusa la motivazione, in lingua italiana e rispetta lo schema JSON.
   `;
-  const suggestionSchema: any = { /* ... schema as before ... */ }; // Schema is large, assume it's correct
+    const suggestionSchema = {
+    type: Type.OBJECT,
+    properties: {
+      suggestions: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            suggestion_id: { type: Type.STRING },
+            source_url: { type: Type.STRING },
+            target_url: { type: Type.STRING },
+            proposed_anchor: { type: Type.STRING },
+            anchor_variants: { type: Type.ARRAY, items: { type: Type.STRING } },
+            insertion_hint: {
+              type: Type.OBJECT,
+              properties: {
+                block_type: { type: Type.STRING },
+                position_hint: { type: Type.STRING },
+                reason: { type: Type.STRING },
+              },
+            },
+            semantic_rationale: {
+              type: Type.OBJECT,
+              properties: {
+                topic_match: { type: Type.STRING },
+                entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+            },
+            risk_checks: {
+              type: Type.OBJECT,
+              properties: {
+                target_status: { type: Type.INTEGER },
+                target_indexable: { type: Type.BOOLEAN },
+                canonical_ok: { type: Type.BOOLEAN },
+                dup_anchor_in_block: { type: Type.BOOLEAN },
+              },
+            },
+            score: { type: Type.NUMBER },
+            notes: { type: Type.STRING },
+            apply_mode: { type: Type.STRING },
+          },
+        },
+      },
+    },
+  };
   
-  let reportSuggestions: any[] = [];
+  let reportSuggestions: Suggestion[] = [];
   try {
-      // ... generation logic as before ...
+     const suggestionResponse = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: suggestionPrompt,
+        config: { responseMimeType: "application/json", responseSchema: suggestionSchema, seed: 42 },
+    });
+    const responseText = suggestionResponse.text;
+    if (responseText) {
+        reportSuggestions = JSON.parse(responseText.trim()).suggestions;
+    }
       console.log(`Agent 2 complete. Generated ${reportSuggestions.length} linking suggestions.`);
   } catch(e) {
       console.error("Error during Strategic Linking phase:", e);
@@ -187,7 +239,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   }
 
   // --- AGENT 3: CONTENT STRATEGIST ---
-  console.log("Starting Agent 3: Content Strategist...");
+  console.log("Master Agent deploying Agent 3: Content Strategist...");
   const contentGapPrompt = `
     Agisci come un SEO Content Strategist di livello mondiale per "${options.site_root}".
 
@@ -206,11 +258,34 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli, per colmare le lacune di performance e aumentare l'autorità.
     - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
   `;
-  const contentGapSchema = { /* ... schema as before ... */ };
+  const contentGapSchema = {
+    type: Type.OBJECT,
+    properties: {
+        content_gap_suggestions: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    relevant_cluster: { type: Type.STRING }
+                }
+            }
+        }
+    }
+  };
 
   let contentGapSuggestions: ContentGapSuggestion[] = [];
   try {
-      // ... generation logic as before ...
+      const contentGapResponse = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: contentGapPrompt,
+        config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
+    });
+    const responseText = contentGapResponse.text;
+    if (responseText) {
+        contentGapSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
+    }
       console.log(`Agent 3 complete. Identified ${contentGapSuggestions.length} content opportunities.`);
   } catch(e) {
       console.error("Error during Content Gap Analysis phase:", e);
@@ -232,7 +307,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     }
   };
   
-  console.log("Analysis finished. Returning final report.");
+  console.log("Master Agent finished. Returning final report.");
   return finalReport;
 }
 
@@ -241,7 +316,7 @@ export async function deepAnalysisFlow(options: {
   pageDiagnostics: PageDiagnostic[];
   gscData?: GscDataRow[];
 }): Promise<DeepAnalysisReport> {
-  console.log(`Starting deep analysis for ${options.pageUrl}`);
+  console.log(`Deep Analysis Agent started for ${options.pageUrl}`);
 
   const analyzedPageDiagnostic = options.pageDiagnostics.find(p => p.url === options.pageUrl);
   if (!analyzedPageDiagnostic) {
@@ -304,6 +379,7 @@ export async function deepAnalysisFlow(options: {
           items: {
             type: Type.OBJECT,
             properties: { query: { type: Type.STRING }, impressions: { type: Type.NUMBER }, ctr: { type: Type.NUMBER } },
+             required: ["query", "impressions", "ctr"]
           }
         },
         inbound_links: {
@@ -316,6 +392,7 @@ export async function deepAnalysisFlow(options: {
                   semantic_rationale: { type: Type.STRING },
                   driving_query: { type: Type.STRING },
                 },
+                required: ["source_url", "proposed_anchor", "semantic_rationale"]
             }
         },
         outbound_links: {
@@ -323,6 +400,7 @@ export async function deepAnalysisFlow(options: {
             items: {
                 type: Type.OBJECT,
                 properties: { target_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING } },
+                required: ["target_url", "proposed_anchor", "semantic_rationale"]
             }
         },
         content_enhancements: {
@@ -330,6 +408,7 @@ export async function deepAnalysisFlow(options: {
             items: {
                 type: Type.OBJECT,
                 properties: { suggestion_title: { type: Type.STRING }, description: { type: Type.STRING } },
+                required: ["suggestion_title", "description"]
             }
         }
     },
@@ -349,7 +428,7 @@ export async function deepAnalysisFlow(options: {
     report.analyzed_url = options.pageUrl;
     report.authority_score = analyzedPageDiagnostic.internal_authority_score;
     
-    console.log(`Deep analysis for ${options.pageUrl} complete.`);
+    console.log(`Deep Analysis Agent for ${options.pageUrl} complete.`);
     return report;
 
   } catch (e) {
