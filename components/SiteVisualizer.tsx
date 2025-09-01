@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Report } from '../types';
@@ -35,7 +36,8 @@ interface SiteVisualizerProps {
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
     // Semplifichiamo il ref per evitare conflitti di tipo complessi.
-    const fgRef = useRef<ForceGraphMethods>();
+    // FIX: Initialize useRef with null to satisfy TypeScript's requirement for an initial value.
+    const fgRef = useRef<ForceGraphMethods | null>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -177,8 +179,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                 linkColor={getLinkColor}
                 linkDirectionalParticles={link => highlightLinks.has(link as MyLink) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
-                // FIX: The function for `linkDirectionalParticleSpeed` must accept an argument for the link, even if unused.
-                linkDirectionalParticleSpeed={_ => 0.006}
+                linkDirectionalParticleSpeed={() => 0.006}
                 onNodeClick={handleNodeClick as (node: NodeObject) => void}
                 onBackgroundClick={handleBackgroundClick}
             />
