@@ -8,6 +8,7 @@ interface SiteVisualizerProps {
 }
 
 // Definiamo tipi più specifici per i nostri nodi e link per una maggiore sicurezza
+// Aggiungiamo le proprietà opzionali che il motore del grafo aggiunge dinamicamente per risolvere gli errori di tipo.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
@@ -15,6 +16,10 @@ interface MyNode extends NodeObject {
     score: number;
     x?: number;
     y?: number;
+    vx?: number;
+    vy?: number;
+    fx?: number;
+    fy?: number;
 }
 
 interface MyLink extends LinkObject {
@@ -33,7 +38,9 @@ const colorPalette = [
 ];
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // Fix: The no-argument call to useRef() caused a runtime error. Explicitly passing `undefined` is the correct way to initialize the ref.
+    // Inizializziamo il ref con il tipo corretto e 'undefined' come valore iniziale
+    // per risolvere l'incompatibilità di tipo che causava l'errore di compilazione.
+    // FIX: Provide an explicit undefined initial value to useRef to support older TypeScript/React versions.
     const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
@@ -77,7 +84,6 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            // Controlliamo che source e target non siano null e siano oggetti prima di accedere a 'id'
             const sourceObj = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode) : null;
             const targetObj = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode) : null;
             const sourceId = sourceObj ? sourceObj.id : link.source as string;
@@ -141,7 +147,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef as any}
+                ref={fgRef}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {

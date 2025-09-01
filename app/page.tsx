@@ -59,8 +59,6 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
 );
 
 const App: React.FC = () => {
-  const [siteUrl, setSiteUrl] = useState<string>('');
-  const [maxSuggestions, setMaxSuggestions] = useState<number>(10);
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +76,12 @@ const App: React.FC = () => {
   const [deepAnalysisReport, setDeepAnalysisReport] = useState<DeepAnalysisReport | null>(null);
   const [isDeepLoading, setIsDeepLoading] = useState<boolean>(false);
   const [deepError, setDeepError] = useState<string | null>(null);
+  
+  // State for GSC data
+  const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
 
-  const handleStartAnalysis = useCallback(async () => {
-    if (!siteUrl || !/^(https?:\/\/)/.test(siteUrl)) {
-        setError("Inserisci un URL valido (es. https://example.com)");
-        return;
-    }
+
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[]) => {
     setIsLoading(true);
     setReport(null);
     setError(null);
@@ -92,6 +90,7 @@ const App: React.FC = () => {
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
     setViewMode('report');
+    setGscData(gscDataPayload);
 
     try {
         const apiResponse = await fetch('/api/analyze', {
@@ -99,8 +98,7 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             site_root: siteUrl, 
-            scoreThreshold: 0.6,
-            maxSuggestions: maxSuggestions 
+            gscData: gscDataPayload
           })
         });
         
@@ -120,9 +118,9 @@ const App: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-  }, [siteUrl, maxSuggestions]);
+  }, []);
 
-  const handleDeepAnalysis = useCallback(async (gscData?: GscDataRow[]) => {
+  const handleDeepAnalysis = useCallback(async () => {
     if (!selectedDeepAnalysisUrl || !report?.page_diagnostics) {
       setDeepError("Seleziona una pagina da analizzare.");
       return;
@@ -138,7 +136,7 @@ const App: React.FC = () => {
         body: JSON.stringify({
           pageUrl: selectedDeepAnalysisUrl,
           pageDiagnostics: report.page_diagnostics,
-          gscData: gscData
+          gscData: gscData // Use the stored GSC data
         })
       });
 
@@ -155,7 +153,7 @@ const App: React.FC = () => {
     } finally {
       setIsDeepLoading(false);
     }
-  }, [selectedDeepAnalysisUrl, report?.page_diagnostics]);
+  }, [selectedDeepAnalysisUrl, report?.page_diagnostics, gscData]);
   
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
@@ -183,7 +181,8 @@ const App: React.FC = () => {
     if (!report) return null;
     return (
       <div className="mb-10">
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-center mb-4">
+           <h2 className="text-3xl font-bold text-slate-800">Report Strategico</h2>
             <button 
               onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
@@ -223,6 +222,50 @@ const App: React.FC = () => {
     );
   };
   
+  const renderDeepAnalysisSection = () => {
+    if (!report) return null;
+    return (
+      <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
+        <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
+        <div className="bg-white p-4 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="md:col-span-2">
+                  <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
+                  <select
+                      value={selectedDeepAnalysisUrl}
+                      onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                  >
+                      {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
+                          <option key={page.url} value={page.url}>
+                          [{page.internal_authority_score.toFixed(1)}] - {page.title}
+                          </option>
+                      )}
+                  </select>
+              </div>
+              <div>
+                  <button
+                      onClick={handleDeepAnalysis}
+                      disabled={isDeepLoading}
+                      className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
+                  >
+                      {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                      Analisi Dettagliata
+                  </button>
+              </div>
+            </div>
+            {deepError && 
+              <div className="mt-4 flex items-center gap-2 text-red-600">
+                <XCircleIcon className="w-5 h-5" />
+                <p className="text-sm">{deepError}</p>
+              </div>
+            }
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
       <div className="container mx-auto p-4 md:p-8">
@@ -238,62 +281,26 @@ const App: React.FC = () => {
 
         <main>
           {!report && !isLoading && (
-            <div className="text-center py-12 max-w-3xl mx-auto">
-              <DocumentTextIcon className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Pronto a ottimizzare la struttura del tuo sito?</h2>
-              <p className="text-slate-500 mb-6">Inserisci l'URL del tuo sito WordPress per avviare l'analisi semantica e trovare opportunità di link interni ad alto impatto.</p>
-              
-              <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                    <input 
-                        type="url"
-                        value={siteUrl}
-                        onChange={(e) => {
-                            setSiteUrl(e.target.value);
-                            if (error) setError(null);
-                        }}
-                        placeholder="https://your-wordpress-site.com"
-                        className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    />
-                    <button
-                        onClick={handleStartAnalysis}
-                        disabled={!siteUrl}
-                        className="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        <LinkIcon className="w-5 h-5" />
-                        Analizza Sito
-                    </button>
-                </div>
-                 {error && 
-                  <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
-                    <XCircleIcon className="w-5 h-5" />
-                    <p className="text-sm">{error}</p>
-                  </div>
-                }
-                <div className="mt-6">
-                  <label htmlFor="maxSuggestions" className="block text-sm font-medium text-slate-600 mb-2">
-                    Numero massimo di suggerimenti (globali): <span className="font-bold text-blue-600">{maxSuggestions}</span>
-                  </label>
-                  <input
-                    id="maxSuggestions"
-                    type="range"
-                    min="5"
-                    max="20"
-                    value={maxSuggestions}
-                    onChange={(e) => setMaxSuggestions(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-              </div>
-            </div>
+            <GscConnect onAnalysisStart={handleStartAnalysis} />
           )}
 
           {isLoading && (
              <div className="text-center py-16 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
-                <h2 className="text-xl font-semibold mb-2">Analisi di {siteUrl} in corso...</h2>
-                <p className="text-slate-500">Calcolo autorità, creazione mappa tematica e generazione suggerimenti.</p>
+                <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
+                <p className="text-slate-500 max-w-md">Sto interrogando i tuoi dati GSC e analizzando il sito per orchestrare gli agenti AI. Potrebbe richiedere un momento...</p>
              </div>
+          )}
+
+          {error && (
+            <div className="text-center py-12 max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md border border-red-200">
+              <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
+              <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
+              <p className="text-slate-600 mb-4">{error}</p>
+              <button onClick={() => { setError(null); setIsLoading(false); setReport(null); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+                  Riprova
+              </button>
+            </div>
           )}
 
           {report && (
@@ -306,20 +313,13 @@ const App: React.FC = () => {
                 <>
                   {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
                   
-                  <GscConnect
-                    report={report}
-                    selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
-                    setSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
-                    onAnalyze={handleDeepAnalysis}
-                    isDeepLoading={isDeepLoading}
-                    deepError={deepError}
-                  />
+                  {renderDeepAnalysisSection()}
 
                   {isDeepLoading && !deepAnalysisReport && (
                     <div className="text-center py-12 flex flex-col items-center">
                       <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
                       <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
-                      <p className="text-slate-500 max-w-md">Sto leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
+                      <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
                     </div>
                   )}
 

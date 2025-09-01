@@ -1,13 +1,12 @@
-
-
 import { interlinkFlow } from '../../../genkit/flows/interlinkFlow';
+import { GscDataRow } from '../../../types';
 
 export const dynamic = 'force-dynamic'; // A convention for serverless functions to not be cached
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { site_root, date_range, maxSuggestions, scoreThreshold } = body;
+    const { site_root, gscData } = body as { site_root: string, gscData?: GscDataRow[] };
 
     if (!site_root) {
       return Response.json({ error: 'site_root is required in the request body.' }, { status: 400 });
@@ -15,9 +14,7 @@ export async function POST(req: Request) {
 
     const report = await interlinkFlow({
       site_root,
-      date_range: date_range ?? "last_90_days",
-      maxSuggestions: maxSuggestions ?? 7,
-      scoreThreshold: scoreThreshold ?? 0.6,
+      gscData,
       applyDraft: false
     });
 
