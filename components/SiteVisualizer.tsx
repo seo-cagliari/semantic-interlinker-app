@@ -4,18 +4,11 @@ import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
 // Definiamo tipi più specifici per i nostri nodi e link.
-// Aggiungiamo le proprietà opzionali che il motore del grafo aggiunge dinamicamente.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
     val: number;
     score: number;
-    x?: number;
-    y?: number;
-    vx?: number;
-    vy?: number;
-    fx?: number;
-    fy?: number;
 }
 
 interface MyLink extends LinkObject {
@@ -33,19 +26,15 @@ const colorPalette = [
     '#f59e0b', // amber-500
 ];
 
-// FIX: Define the props type for the SiteVisualizer component to resolve 'Cannot find name' error.
 interface SiteVisualizerProps {
     report: Report;
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
     // SOLUZIONE DEFINITIVA all'errore di tipo persistente:
-    // 1. Semplifichiamo il tipo del ref per evitare conflitti con i generici complessi della libreria.
-    // 2. Usiamo un cast `as any` sulla prop `ref` del componente. Questa è una tecnica pragmatica
-    //    e sicura per superare i controlli di tipo troppo restrittivi di una libreria esterna
-    //    senza compromettere la funzionalità.
-    // FIX: The useRef hook requires an initial value. Initializing with null is a standard pattern for refs that will be populated by components.
-    const fgRef = useRef<ForceGraphMethods | null>(null);
+    // La libreria si aspetta un ref il cui valore iniziale sia `undefined`, non `null`.
+    // Inizializzandolo correttamente e specificando i tipi generici, risolviamo l'incompatibilità.
+    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -88,7 +77,6 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            // Aggiungiamo controlli di sicurezza per gestire sia stringhe che oggetti
             const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as MyNode).id : link.source as string;
             const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as MyNode).id : link.target as string;
 
@@ -150,7 +138,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef as any}
+                ref={fgRef}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -159,7 +147,6 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
-                    // Aggiungiamo un controllo di sicurezza per x e y
                     if (myNode.x === undefined || myNode.y === undefined) return;
 
                     ctx.beginPath();
