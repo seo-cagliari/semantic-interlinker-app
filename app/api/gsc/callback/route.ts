@@ -2,6 +2,8 @@ import { google } from 'googleapis';
 import { NextRequest } from 'next/server';
 import { parseCookies, setCookie } from 'nookies';
 
+export const dynamic = 'force-dynamic';
+
 const OAUTH2_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const OAUTH2_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const OAUTH2_REDIRECT_URI = process.env.NEXT_PUBLIC_GSC_REDIRECT_URI;

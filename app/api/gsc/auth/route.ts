@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 
+export const dynamic = 'force-dynamic';
+
 const OAUTH2_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const OAUTH2_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 // This should be the full URL of your callback route
