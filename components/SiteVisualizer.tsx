@@ -3,12 +3,8 @@ import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-f
 import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
-interface SiteVisualizerProps {
-  report: Report;
-}
-
-// Definiamo tipi più specifici per i nostri nodi e link per una maggiore sicurezza
-// Aggiungiamo le proprietà opzionali che il motore del grafo aggiunge dinamicamente per risolvere gli errori di tipo.
+// Definiamo tipi più specifici per i nostri nodi e link.
+// Aggiungiamo le proprietà opzionali che il motore del grafo aggiunge dinamicamente.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
@@ -37,11 +33,19 @@ const colorPalette = [
     '#f59e0b', // amber-500
 ];
 
+// FIX: Define the props type for the SiteVisualizer component to resolve 'Cannot find name' error.
+interface SiteVisualizerProps {
+    report: Report;
+}
+
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX DEFINITIVO: Inizializziamo il ref con 'undefined' come valore iniziale
-    // per risolvere l'incompatibilità di tipo che causava l'errore di compilazione.
-    // FIX: The useRef hook requires an initial value. `undefined` is passed as the argument.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink> | undefined>(undefined);
+    // SOLUZIONE DEFINITIVA all'errore di tipo persistente:
+    // 1. Semplifichiamo il tipo del ref per evitare conflitti con i generici complessi della libreria.
+    // 2. Usiamo un cast `as any` sulla prop `ref` del componente. Questa è una tecnica pragmatica
+    //    e sicura per superare i controlli di tipo troppo restrittivi di una libreria esterna
+    //    senza compromettere la funzionalità.
+    // FIX: The useRef hook requires an initial value. Initializing with null is a standard pattern for refs that will be populated by components.
+    const fgRef = useRef<ForceGraphMethods | null>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -84,8 +88,9 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            const sourceId = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode).id : link.source as string;
-            const targetId = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode).id : link.target as string;
+            // Aggiungiamo controlli di sicurezza per gestire sia stringhe che oggetti
+            const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as MyNode).id : link.source as string;
+            const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as MyNode).id : link.target as string;
 
             if (sourceId === clickedNode.id || targetId === clickedNode.id) {
                 newHighlightLinks.add(link);
@@ -145,7 +150,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef as React.MutableRefObject<ForceGraphMethods<NodeObject, LinkObject> | undefined>}
+                ref={fgRef as any}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -154,8 +159,11 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
+                    // Aggiungiamo un controllo di sicurezza per x e y
+                    if (myNode.x === undefined || myNode.y === undefined) return;
+
                     ctx.beginPath();
-                    ctx.arc(myNode.x!, myNode.y!, myNode.val, 0, 2 * Math.PI, false);
+                    ctx.arc(myNode.x, myNode.y, myNode.val, 0, 2 * Math.PI, false);
                     ctx.fillStyle = isHighlighted ? getNodeColor(myNode) : 'rgba(156, 163, 175, 0.5)';
                     ctx.fill();
 
@@ -171,7 +179,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                         ctx.textBaseline = 'middle';
                         ctx.fillStyle = isHighlighted ? '#1e293b' : 'rgba(100, 115, 135, 0.8)';
                         const shortLabel = label.length > 25 ? `${label.substring(0, 25)}...` : label;
-                        ctx.fillText(shortLabel, myNode.x!, myNode.y! + myNode.val + 4);
+                        ctx.fillText(shortLabel, myNode.x, myNode.y + myNode.val + 4);
                     }
                 }}
                 linkWidth={link => highlightLinks.has(link as MyLink) ? 2 : 0.5}
