@@ -1,7 +1,5 @@
-
-
-
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+// FIX: Import the ForceGraph2D component, which is the default export of the library.
 import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
@@ -37,9 +35,8 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize useRef with null for component refs.
-    // Inizializziamo il ref per accedere ai metodi del componente ForceGraph2D.
-    const fgRef = useRef<ForceGraphMethods<MyNode, MyLink>>(null);
+    // Inizializziamo un ref standard per superare i problemi di tipo della libreria.
+    const fgRef = useRef(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<MyLink>>(new Set());
@@ -82,7 +79,6 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         const newHighlightNodes = new Set<MyNode>([clickedNode]);
     
         links.forEach(link => {
-            // Aggiungiamo controlli di sicurezza
             const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as MyNode).id : link.source as string;
             const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as MyNode).id : link.target as string;
 
@@ -99,9 +95,10 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         setHighlightLinks(newHighlightLinks);
         setHighlightNodes(newHighlightNodes);
 
-        if(fgRef.current && clickedNode.x !== undefined && clickedNode.y !== undefined){
-            fgRef.current.centerAt(clickedNode.x, clickedNode.y, 1000);
-            fgRef.current.zoom(2.5, 1000);
+        const fg = fgRef.current as ForceGraphMethods<MyNode, MyLink> | null;
+        if(fg && clickedNode.x !== undefined && clickedNode.y !== undefined){
+            fg.centerAt(clickedNode.x, clickedNode.y, 1000);
+            fg.zoom(2.5, 1000);
         }
 
     }, [graphData]);
@@ -110,8 +107,9 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         setHighlightedNode(null);
         setHighlightLinks(new Set());
         setHighlightNodes(new Set());
-        if(fgRef.current){
-            fgRef.current.zoomToFit(1000, 100);
+        const fg = fgRef.current as ForceGraphMethods<MyNode, MyLink> | null;
+        if(fg){
+            fg.zoomToFit(1000, 100);
         }
     }, []);
 
@@ -120,8 +118,9 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
 
     useEffect(() => {
         setTimeout(() => {
-            if(fgRef.current){
-                fgRef.current.zoomToFit(1000, 100);
+            const fg = fgRef.current as ForceGraphMethods<MyNode, MyLink> | null;
+            if(fg){
+                fg.zoomToFit(1000, 100);
             }
         }, 500);
     }, []);
@@ -144,7 +143,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef}
+                ref={fgRef as any} // FIX: Casting as 'any' to bypass strict library type-checking on the ref prop.
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
@@ -153,7 +152,6 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
 
-                    // Controllo di sicurezza
                     if (myNode.x === undefined || myNode.y === undefined) return;
 
                     ctx.beginPath();
