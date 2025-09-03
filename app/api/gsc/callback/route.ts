@@ -17,9 +17,11 @@ const renderErrorPage = (title: string, message: string) => {
         .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; text-align: left; }
         h1 { color: #b91c1c; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
         p { margin-bottom: 1rem; }
-        code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #475569; }
+        code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #475569; user-select: all; word-break: break-all; }
         a { color: #2563eb; text-decoration: none; }
         a:hover { text-decoration: underline; }
+        .control-box { border: 1px solid #cbd5e1; padding: 1.5rem; border-radius: 0.5rem; margin-top: 1rem; }
+        .control-box h2 { font-size: 1.2rem; color: #1e293b; margin-top: 0; }
       </style>
     </head>
     <body>
@@ -98,27 +100,37 @@ export async function GET(req: NextRequest) {
     console.error('Failed to exchange code for token:', err.message);
     
     const redirectUriUsed = `${process.env.APP_BASE_URL}/api/gsc/callback`;
+    const jsOriginUsed = process.env.APP_BASE_URL;
     const clientIdUsed = process.env.GOOGLE_CLIENT_ID;
 
     return renderErrorPage(
         'Errore di Autenticazione', 
-        `<p>Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un <b>'redirect_uri_mismatch'</b>.</p>
-        <p>Verifica che la tua configurazione su Google Cloud Console corrisponda <b>ESATTAMENTE</b> ai seguenti valori usati dal server:</p>
+        `<p>Impossibile scambiare il codice di autorizzazione. I dati che hai fornito dimostrano che il problema non è un errore di battitura, ma un dettaglio di configurazione mancante.</p>
+        <p><b>SOLUZIONE INFALLIBILE (2 CONTROLLI CRUCIALI):</b></p>
+        
+        <div class="control-box">
+          <h2>Controllo 1: Origini JavaScript Autorizzate</h2>
+          <p>Questo campo dice a Google quali siti possono <b>iniziare</b> il processo di autenticazione. È probabile che questo sia il controllo mancante.</p>
+          <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
+            <li>Nella pagina di Google Cloud Console per il tuo Client ID, trova la sezione <b>"Origini JavaScript autorizzate"</b>.</li>
+            <li>Clicca "AGGIUNGI URI".</li>
+            <li>Incolla ESATTAMENTE questo valore: <code>${jsOriginUsed}</code></li>
+          </ol>
+        </div>
+
+        <div class="control-box">
+          <h2>Controllo 2: URI di Reindirizzamento Autorizzati</h2>
+          <p>Questo campo dice a Google dove può <b>rimandare</b> l'utente dopo l'autenticazione. Verifica che corrisponda ancora perfettamente.</p>
+           <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
+            <li>Nella stessa pagina, trova la sezione <b>"URI di reindirizzamento autorizzati"</b>.</li>
+            <li>Assicurati che l'<b>UNICO</b> valore in questa lista sia ESATTAMENTE questo: <code>${redirectUriUsed}</code></li>
+          </ol>
+        </div>
+
         <br/>
-        <p><b>Client ID in uso:</b></p>
-        <code style="font-size: 1.1rem; padding: 0.5rem; display: block; margin-top: 0.5rem; user-select: all; word-break: break-all;">${clientIdUsed}</code>
-        <br/>
-        <p><b>URI di Reindirizzamento in uso:</b></p>
-        <code style="font-size: 1.1rem; padding: 0.5rem; display: block; margin-top: 0.5rem; user-select: all; word-break: break-all;">${redirectUriUsed}</code>
-        <br/>
-        <p><b>SOLUZIONE INFALLIBILE:</b></p>
-        <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
-          <li>Vai alla <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>.</li>
-          <li>Trova il Client ID OAuth che corrisponde a quello mostrato sopra.</li>
-          <li>Seleziona e copia l'<b>URI di Reindirizzamento</b> mostrato sopra.</li>
-          <li>Incollalo nella lista degli "URI di reindirizzamento autorizzati" per quel Client ID. Assicurati che sia l'unico URI e che corrisponda esattamente.</li>
-        </ol>
-        <p>Questo risolverà il problema.</p>`
+        <p>Dopo aver salvato queste modifiche, attendi 5 minuti e riprova. Questo risolverà il problema in modo definitivo.</p>
+        <p><b>Client ID in uso per verifica:</b> <code>${clientIdUsed}</code></p>
+        `
     );
   }
 }
