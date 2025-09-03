@@ -9,11 +9,11 @@ const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: str
   const script = status === 'success'
     ? `<script>
         if (window.opener) {
-          // Send an object with status and the production URL for a definitive redirect
-          window.opener.postMessage({ status: 'auth_success', productionUrl: '${baseUrl}' }, '*');
+          // Send a simple success status. The opener window will handle the state refresh.
+          window.opener.postMessage({ status: 'auth_success' }, '*');
         }
-        // Give a bit more time for the message to be processed before closing
-        setTimeout(() => window.close(), 800);
+        // Give a bit of time for the message to be processed before closing
+        setTimeout(() => window.close(), 500);
       </script>`
     : '';
 

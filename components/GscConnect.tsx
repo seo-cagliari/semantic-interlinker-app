@@ -45,7 +45,8 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
   const handleConnect = () => {
     setIsAuthenticating(true);
     const authUrl = '/api/gsc/auth';
-    const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noopener,noreferrer');
+    // Remove 'noopener' to allow the popup to communicate back via window.opener
+    const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noreferrer');
     
     let intervalId: NodeJS.Timeout | null = null;
     
@@ -54,29 +55,29 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
       if (intervalId) {
         clearInterval(intervalId);
       }
+      setIsAuthenticating(false);
     };
 
     const handleAuthMessage = (event: MessageEvent) => {
-      // Check for our specific message object from a trusted source
-      if (event.data && event.data.status === 'auth_success' && event.data.productionUrl) {
+      // Check for our specific success message
+      if (event.data && event.data.status === 'auth_success') {
         if (authWindow) {
           authWindow.close();
         }
         cleanup();
-        
-        // The definitive fix: redirect to the stable production URL
-        // where the authentication cookie is valid.
-        window.location.href = event.data.productionUrl;
+        // Now that auth is successful, re-check the status to fetch sites
+        checkAuthStatus();
       }
     };
 
     window.addEventListener('message', handleAuthMessage);
 
     intervalId = setInterval(() => {
-      // Fallback for when the window is closed manually before auth completes
+      // Fallback for when the window is closed manually
       if (authWindow && authWindow.closed) {
         cleanup();
-        setIsAuthenticating(false); // Stop the spinner
+        // Check status in case auth succeeded before manual close
+        checkAuthStatus();
       }
     }, 500);
   };
