@@ -47,33 +47,37 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     const authUrl = '/api/gsc/auth';
     const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noopener,noreferrer');
     
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    const cleanup = () => {
+      window.removeEventListener('message', handleAuthMessage);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+
     const handleAuthMessage = (event: MessageEvent) => {
-        if (event.data === 'auth_success') {
-            if (authWindow) {
-                authWindow.close();
-            }
-            window.removeEventListener('message', handleAuthMessage);
-            setIsAuthenticating(false);
-            // After successful auth, redirect to the production app URL where the cookie is valid.
-            // This assumes APP_BASE_URL is exposed to the client, which is a good practice for this flow.
-            // The checkAuthStatus() will be implicitly called by the page reload on the production domain.
-            const productionUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || window.location.origin;
-            window.location.href = productionUrl;
+      // Check for our specific message object from a trusted source
+      if (event.data && event.data.status === 'auth_success' && event.data.productionUrl) {
+        if (authWindow) {
+          authWindow.close();
         }
+        cleanup();
+        
+        // The definitive fix: redirect to the stable production URL
+        // where the authentication cookie is valid.
+        window.location.href = event.data.productionUrl;
+      }
     };
 
     window.addEventListener('message', handleAuthMessage);
 
-    const checkWindowClosed = setInterval(() => {
-        if (authWindow && authWindow.closed) {
-            clearInterval(checkWindowClosed);
-            setIsAuthenticating(false);
-            // If the window is closed manually, re-check status just in case.
-            setTimeout(() => {
-                checkAuthStatus();
-            }, 1000);
-            window.removeEventListener('message', handleAuthMessage);
-        }
+    intervalId = setInterval(() => {
+      // Fallback for when the window is closed manually before auth completes
+      if (authWindow && authWindow.closed) {
+        cleanup();
+        setIsAuthenticating(false); // Stop the spinner
+      }
     }, 500);
   };
 

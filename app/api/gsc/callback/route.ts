@@ -4,14 +4,16 @@ import { serialize } from 'cookie';
 
 export const runtime = 'nodejs';
 
-const renderPage = (status: 'success' | 'error', message?: string) => {
+const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: string) => {
   const title = status === 'success' ? 'Autenticazione Riuscita' : 'Errore di Autenticazione';
   const script = status === 'success'
     ? `<script>
         if (window.opener) {
-          window.opener.postMessage('auth_success', '*');
+          // Send an object with status and the production URL for a definitive redirect
+          window.opener.postMessage({ status: 'auth_success', productionUrl: '${baseUrl}' }, '*');
         }
-        setTimeout(() => window.close(), 500);
+        // Give a bit more time for the message to be processed before closing
+        setTimeout(() => window.close(), 800);
       </script>`
     : '';
 
@@ -101,7 +103,7 @@ export async function GET(req: NextRequest) {
       domain: domain // Set the cookie on the base domain to be available across subdomains
     });
     
-    const response = renderPage('success');
+    const response = renderPage('success', undefined, baseUrl);
     response.headers.set('Set-Cookie', cookie);
     return response;
 
