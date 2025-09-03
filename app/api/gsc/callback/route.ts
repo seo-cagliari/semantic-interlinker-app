@@ -6,14 +6,15 @@ export const runtime = 'nodejs';
 
 const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: string) => {
   const title = status === 'success' ? 'Autenticazione Riuscita' : 'Errore di Autenticazione';
-  const script = status === 'success'
+  const script = status === 'success' && baseUrl
     ? `<script>
         if (window.opener) {
-          // Send a simple success status. The opener window will handle the state refresh.
-          window.opener.postMessage({ status: 'auth_success' }, '*');
+          // Send the success status AND the base URL to the opener window.
+          // The opener will use the base URL to redirect itself, ensuring it's on the correct domain.
+          window.opener.postMessage({ status: 'auth_success', baseUrl: '${baseUrl}' }, '*');
         }
-        // Give a bit of time for the message to be processed before closing
-        setTimeout(() => window.close(), 500);
+        // Give a moment for the message to be sent before closing.
+        setTimeout(() => window.close(), 300);
       </script>`
     : '';
 

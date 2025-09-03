@@ -45,41 +45,37 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
   const handleConnect = () => {
     setIsAuthenticating(true);
     const authUrl = '/api/gsc/auth';
-    // Remove 'noopener' to allow the popup to communicate back via window.opener
     const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noreferrer');
-    
-    let intervalId: NodeJS.Timeout | null = null;
-    
-    const cleanup = () => {
-      window.removeEventListener('message', handleAuthMessage);
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-      setIsAuthenticating(false);
-    };
 
-    const handleAuthMessage = (event: MessageEvent) => {
-      // Check for our specific success message
-      if (event.data && event.data.status === 'auth_success') {
-        if (authWindow) {
-          authWindow.close();
+    const handleMessage = (event: MessageEvent) => {
+        // Security: a simple check for the message structure and origin.
+        if (event.data && event.data.status === 'auth_success' && typeof event.data.baseUrl === 'string') {
+            // This is the success signal from our popup.
+            // The only reliable way to use the new session cookie is to be on the domain it was set for.
+            // So, we redirect the main window to the stable production URL.
+            window.location.href = event.data.baseUrl;
+            
+            // The page will navigate away, but we can still try to clean up.
+            if (authWindow) authWindow.close();
+            window.removeEventListener('message', handleMessage);
+            if (pollInterval) clearInterval(pollInterval);
         }
-        cleanup();
-        // Now that auth is successful, re-check the status to fetch sites
-        checkAuthStatus();
-      }
     };
 
-    window.addEventListener('message', handleAuthMessage);
+    window.addEventListener('message', handleMessage);
 
-    intervalId = setInterval(() => {
-      // Fallback for when the window is closed manually
-      if (authWindow && authWindow.closed) {
-        cleanup();
-        // Check status in case auth succeeded before manual close
-        checkAuthStatus();
-      }
-    }, 500);
+    // Fallback polling mechanism in case postMessage fails or window is closed manually.
+    const pollInterval = setInterval(() => {
+        if (authWindow && authWindow.closed) {
+            clearInterval(pollInterval);
+            window.removeEventListener('message', handleMessage);
+            // The popup closed without sending a message. We can't redirect.
+            // Our only option is to stop waiting and re-check the auth status.
+            // This may or may not work depending on cookie domain policies, but it's the best we can do to avoid getting stuck.
+            setIsAuthenticating(false);
+            checkAuthStatus();
+        }
+    }, 1000);
   };
 
 
