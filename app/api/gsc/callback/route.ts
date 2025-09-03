@@ -1,4 +1,3 @@
-import { google } from 'googleapis';
 import { NextRequest } from 'next/server';
 import { serialize } from 'cookie';
 
@@ -66,20 +65,35 @@ export async function GET(req: NextRequest) {
   try {
     const baseUrl = process.env.APP_BASE_URL;
     if (!baseUrl) {
-      // This check satisfies TypeScript and adds robustness.
       throw new Error("APP_BASE_URL is not defined in the environment.");
     }
     
     const redirectUri = `${baseUrl}/api/gsc/callback`;
     
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri
-    );
+    // --- Manual Token Exchange via Fetch ---
+    const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+    const tokenResponse = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code: code,
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
 
-    const { tokens } = await oauth2Client.getToken(code);
-    
+    const tokens = await tokenResponse.json();
+
+    if (!tokenResponse.ok) {
+      const googleError = tokens.error_description || JSON.stringify(tokens);
+      throw new Error(`[Manual Fetch] Google Token API Error: ${googleError}`);
+    }
+    // --- End Manual Token Exchange ---
+
     const url = new URL(baseUrl);
     const domain = url.hostname;
 
@@ -91,7 +105,6 @@ export async function GET(req: NextRequest) {
       domain: domain
     });
     
-    // Redirect back to the STABLE production homepage
     const response = Response.redirect(baseUrl, 302);
     response.headers.set('Set-Cookie', cookie);
     return response;
