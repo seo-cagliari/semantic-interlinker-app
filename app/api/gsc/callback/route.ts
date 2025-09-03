@@ -25,7 +25,7 @@ const renderErrorPage = (title: string, message: string) => {
     <body>
       <div class="container">
         <h1><span style="font-size: 1.5rem;">🚨</span> ${title}</h1>
-        <p>${message}</p>
+        <div>${message}</div>
       </div>
     </body>
     </html>`,
@@ -96,13 +96,23 @@ export async function GET(req: NextRequest) {
 
   } catch (err: any) {
     console.error('Failed to exchange code for token:', err.message);
-    const appBaseUrl = process.env.APP_BASE_URL || '[NON IMPOSTATA]';
+    
+    // This is the EXACT URI that was used in the failed request.
+    const redirectUriUsed = `${process.env.APP_BASE_URL}/api/gsc/callback`;
+
     return renderErrorPage(
         'Errore di Autenticazione', 
-        `Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un 'redirect_uri_mismatch'.
-        <br/><br/><b>VERIFICA QUESTI PUNTI:</b>
-        <br/>1. La variabile d'ambiente <code>APP_BASE_URL</code> in Vercel deve essere: <code>https://semantic-interlinker-app.vercel.app</code>
-        <br/>2. L'URI di reindirizzamento autorizzato in Google Cloud Console deve essere: <code>https://semantic-interlinker-app.vercel.app/api/gsc/callback</code>`
+        `<p>Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un <b>'redirect_uri_mismatch'</b>.</p>
+        <p>L'applicazione ha usato questo esatto URI di reindirizzamento durante il tentativo:</p>
+        <code style="font-size: 1.1rem; padding: 0.5rem; display: block; margin-top: 0.5rem; user-select: all; word-break: break-all;">${redirectUriUsed}</code>
+        <br/>
+        <p><b>SOLUZIONE INFALLIBILE:</b></p>
+        <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
+          <li>Seleziona e copia l'intero URI qui sopra.</li>
+          <li>Vai alla <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> e trova il tuo Client ID OAuth.</li>
+          <li>Incolla questo URI nella lista degli "URI di reindirizzamento autorizzati". Assicurati che corrisponda <b>esattamente</b>.</li>
+        </ol>
+        <p>Questo risolverà il problema.</p>`
     );
   }
 }
