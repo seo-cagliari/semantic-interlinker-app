@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!code) {
     // Redirect to a failure page or the main page with an error
     const homeUrl = new URL('/', req.url);
-    homeUrl.searchParams.set('error', 'gsc_auth_failed');
+    homeUrl.searchParams.set('error', 'Autorizzazione Google fallita. Nessun codice di autorizzazione ricevuto.');
     return NextResponse.redirect(homeUrl);
   }
   

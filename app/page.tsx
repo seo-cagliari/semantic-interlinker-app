@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
@@ -58,7 +59,8 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
   </div>
 );
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
+  const searchParams = useSearchParams();
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +81,19 @@ const App: React.FC = () => {
   
   // State for GSC data
   const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+        setError(errorParam);
+        // Clean the URL to avoid showing the error on refresh
+        if (window.history.replaceState) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('error');
+          window.history.replaceState({}, '', url.toString());
+        }
+    }
+  }, [searchParams]);
 
 
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[]) => {
@@ -280,7 +295,7 @@ const App: React.FC = () => {
         </header>
 
         <main>
-          {!report && !isLoading && (
+          {!report && !isLoading && !error && (
             <GscConnect onAnalysisStart={handleStartAnalysis} />
           )}
 
@@ -297,7 +312,7 @@ const App: React.FC = () => {
               <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
               <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
               <p className="text-slate-600 mb-4">{error}</p>
-              <button onClick={() => { setError(null); setIsLoading(false); setReport(null); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+              <button onClick={() => { window.location.href = '/'; }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
                   Riprova
               </button>
             </div>
@@ -366,5 +381,17 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+
+const App: React.FC = () => (
+    <React.Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+            <LoadingSpinnerIcon className="w-16 h-16 text-blue-600"/>
+        </div>
+    }>
+        <AppContent />
+    </React.Suspense>
+);
+
 
 export default App;
