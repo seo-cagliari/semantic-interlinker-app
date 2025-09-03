@@ -4,9 +4,10 @@ import { LoadingSpinnerIcon, GoogleGIcon, LinkIcon, XCircleIcon } from './Icons'
 
 interface GscConnectProps {
   onAnalysisStart: (siteUrl: string, gscData: GscDataRow[]) => void;
+  isExchangingCode: boolean;
 }
 
-export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
+export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, isExchangingCode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
@@ -25,8 +26,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         }
         setIsAuthenticated(true);
       } else {
-        const errorData = await response.json().catch(() => ({error: 'Authentication failed.'}));
-        throw new Error(errorData.details || errorData.error || 'Autenticazione fallita.');
+        setIsAuthenticated(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossibile verificare lo stato di autenticazione.');
@@ -37,19 +37,12 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
   }, []);
 
   useEffect(() => {
-    checkAuthStatus();
-  }, [checkAuthStatus]);
-
-  const handleConnect = () => {
-    const authWindow = window.open('/api/gsc/auth', '_blank', 'width=500,height=600');
-    const timer = setInterval(() => {
-      if (authWindow?.closed) {
-        clearInterval(timer);
-        setIsLoading(true);
+    // Don't check auth status while the code is being exchanged.
+    if (!isExchangingCode) {
         checkAuthStatus();
-      }
-    }, 1000);
-  };
+    }
+  }, [checkAuthStatus, isExchangingCode]);
+
 
   const handleStartAnalysis = async () => {
     if (!selectedGscSite) {
@@ -77,11 +70,13 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     }
   };
 
-  if (isLoading && isAuthenticated === null) {
+  if (isLoading || isExchangingCode) {
       return (
         <div className="text-center py-12">
             <LoadingSpinnerIcon className="w-8 h-8 mx-auto text-slate-400" />
-            <p className="mt-2 text-slate-500">Verifica autenticazione GSC...</p>
+            <p className="mt-2 text-slate-500">
+                {isExchangingCode ? 'Finalizzazione della connessione in corso...' : 'Verifica autenticazione GSC...'}
+            </p>
         </div>
       );
   }
@@ -95,10 +90,10 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         {!isAuthenticated ? (
           <div>
             <p className="text-slate-600 mb-4">È richiesto l'accesso per leggere i dati del tuo sito da Google Search Console.</p>
-            <button onClick={handleConnect} disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors border border-blue-700 flex items-center justify-center gap-2 disabled:bg-slate-400">
-              {isLoading ? <LoadingSpinnerIcon className="w-5 h-5"/> : <GoogleGIcon className="w-5 h-5" />}
+            <a href="/api/gsc/auth" className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors border border-blue-700">
+              <GoogleGIcon className="w-5 h-5" />
               Collega Google Search Console
-            </button>
+            </a>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
