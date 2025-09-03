@@ -44,33 +44,34 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
 
   const handleConnect = () => {
     setIsAuthenticating(true);
-    const authWindow = window.open('/api/gsc/auth', '_blank', 'width=600,height=700,noopener,noreferrer');
+    const authUrl = '/api/gsc/auth';
+    const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noopener,noreferrer');
     
     const handleAuthMessage = (event: MessageEvent) => {
-      // Assicurati che il messaggio provenga dalla stessa origine per sicurezza
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-
-      if (event.data === 'auth_success') {
-        if (authWindow) {
-          authWindow.close();
+        if (event.data === 'auth_success') {
+            if (authWindow) {
+                authWindow.close();
+            }
+            window.removeEventListener('message', handleAuthMessage);
+            setIsAuthenticating(false);
+            // After successful auth, redirect to the production app URL where the cookie is valid.
+            // This assumes APP_BASE_URL is exposed to the client, which is a good practice for this flow.
+            // The checkAuthStatus() will be implicitly called by the page reload on the production domain.
+            const productionUrl = process.env.NEXT_PUBLIC_APP_BASE_URL || window.location.origin;
+            window.location.href = productionUrl;
         }
-        checkAuthStatus(); // Ricarica lo stato dell'autenticazione
-        setIsAuthenticating(false);
-      }
-      
-      // Rimuovi il listener dopo aver ricevuto il messaggio
-      window.removeEventListener('message', handleAuthMessage);
     };
 
     window.addEventListener('message', handleAuthMessage);
 
-    // Controlla se la finestra è stata chiusa dall'utente
     const checkWindowClosed = setInterval(() => {
         if (authWindow && authWindow.closed) {
             clearInterval(checkWindowClosed);
             setIsAuthenticating(false);
+            // If the window is closed manually, re-check status just in case.
+            setTimeout(() => {
+                checkAuthStatus();
+            }, 1000);
             window.removeEventListener('message', handleAuthMessage);
         }
     }, 500);
@@ -103,7 +104,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && isAuthenticated === null) {
       return (
         <div className="text-center py-12">
             <LoadingSpinnerIcon className="w-8 h-8 mx-auto text-slate-400" />
@@ -126,7 +127,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
               disabled={isAuthenticating}
               className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors border border-blue-700 disabled:bg-blue-400"
             >
-              {isAuthenticating ? <LoadingSpinnerIcon className="w-5 h-5"/> : <GoogleGIcon className="w-5 h-5" />}
+              {isAuthenticating ? <LoadingSpinnerIcon className="w-5 h-5"/> : <GoogleGIcon className="w-5 h-s" />}
               {isAuthenticating ? 'In attesa di Google...' : 'Collega Google Search Console'}
             </button>
           </div>

@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   if (missingVars.length > 0) {
     let errorMessage = `Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>. Per favore, configurale nelle impostazioni del tuo provider di hosting (es. Vercel) per procedere.`;
     if (missingVars.includes('APP_BASE_URL')) {
-        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL completo della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
+        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere impostata con l'URL di produzione **stabile e principale** del tuo progetto Vercel (es. <code>https://your-app-name.vercel.app</code>), senza lo slash finale. Questo URL non deve cambiare tra un aggiornamento e l'altro.`;
     }
     return renderErrorPage(
       'Errore di Configurazione del Server',

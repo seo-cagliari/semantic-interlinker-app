@@ -11,7 +11,7 @@ const renderPage = (status: 'success' | 'error', message?: string) => {
         if (window.opener) {
           window.opener.postMessage('auth_success', '*');
         }
-        window.close();
+        setTimeout(() => window.close(), 500);
       </script>`
     : '';
 
@@ -33,7 +33,7 @@ const renderPage = (status: 'success' | 'error', message?: string) => {
     <body>
       <div class="container">
         <h1>${title}</h1>
-        <p>${message || (status === 'success' ? 'Puoi chiudere questa finestra.' : 'Si è verificato un errore imprevisto.')}</p>
+        <p>${message || (status === 'success' ? 'Autenticazione completata con successo. Questa finestra si chiuderà automaticamente.' : 'Si è verificato un errore imprevisto.')}</p>
       </div>
       ${script}
     </body>
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   if (missingVars.length > 0) {
     let errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
      if (missingVars.includes('APP_BASE_URL')) {
-        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL completo della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
+        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL di produzione stabile della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
     }
     console.error('Callback Error:', errorMessage);
     return renderPage('error', errorMessage);
@@ -84,11 +84,16 @@ export async function GET(req: NextRequest) {
 
     const { tokens } = await oauth2Client.getToken(code);
     
+    // Extract the hostname for the cookie domain
+    const url = new URL(baseUrl);
+    const domain = url.hostname;
+
     const cookie = serialize('gsc_token', JSON.stringify(tokens), {
       httpOnly: true,
       secure: process.env.NODE_ENV !== 'development',
       maxAge: 60 * 60 * 24 * 30, // 30 giorni
       path: '/',
+      domain: domain // Set the cookie on the base domain to be available across subdomains
     });
     
     const response = renderPage('success');
@@ -97,6 +102,6 @@ export async function GET(req: NextRequest) {
 
   } catch (err: any) {
     console.error('Failed to exchange code for token:', err.message);
-    return renderPage('error', `Impossibile scambiare il codice di autorizzazione. Questo è spesso causato da un 'redirect_uri_mismatch'. Assicurati che il tuo URL di base (<code>${baseUrl}</code>) e l'URI di reindirizzamento (<code>${redirectUri}</code>) siano configurati correttamente nella Google Cloud Console. Dettagli: ${err.message}`);
+    return renderPage('error', `Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un 'redirect_uri_mismatch'.<br/><br/><b>VERIFICA QUESTI PUNTI:</b><br/>1. La variabile d'ambiente <code>APP_BASE_URL</code> in Vercel deve essere: <code>${baseUrl}</code><br/>2. L'URI di reindirizzamento autorizzato in Google Cloud Console deve essere: <code>${redirectUri}</code>`);
   }
 }
