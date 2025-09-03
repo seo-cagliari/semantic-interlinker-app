@@ -63,6 +63,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const baseUrl = process.env.APP_BASE_URL;
+    if (!baseUrl) {
+      // This check satisfies TypeScript and adds robustness.
+      throw new Error("APP_BASE_URL is not defined in the environment.");
+    }
+    
     const redirectUri = `${baseUrl}/api/gsc/callback`;
     
     const oauth2Client = new google.auth.OAuth2(
