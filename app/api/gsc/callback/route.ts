@@ -4,23 +4,6 @@ import { serialize } from 'cookie';
 
 export const runtime = 'nodejs';
 
-// Helper function to get the base URL, must be identical to the one in auth route
-function getBaseUrl(req: NextRequest): string {
-    // Vercel system env var for the deployment's URL
-    if (process.env.VERCEL_URL) {
-        return `https://${process.env.VERCEL_URL}`;
-    }
-    // Fallback for local development or other environments
-    const host = req.headers.get('host');
-    // For local dev, req.headers.get('host') is 'localhost:3000'
-    // For production, it's the domain. We assume https for non-local.
-    const protocol = host?.includes('localhost') ? 'http' : 'https';
-    if (!host) {
-        throw new Error("Could not determine the host from the request headers.");
-    }
-    return `${protocol}://${host}`;
-}
-
 const renderErrorPage = (title: string, message: string) => {
   return new Response(
     `<!DOCTYPE html>
@@ -70,6 +53,7 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
+  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
 
   if (missingVars.length > 0) {
     const errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
@@ -78,7 +62,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = process.env.APP_BASE_URL;
     const redirectUri = `${baseUrl}/api/gsc/callback`;
     
     const oauth2Client = new google.auth.OAuth2(
@@ -100,23 +84,20 @@ export async function GET(req: NextRequest) {
       domain: domain
     });
     
-    // Redirect back to the homepage of the specific deployment (preview or prod)
+    // Redirect back to the STABLE production homepage
     const response = Response.redirect(baseUrl, 302);
     response.headers.set('Set-Cookie', cookie);
     return response;
 
   } catch (err: any) {
-    const baseUrl = getBaseUrl(req);
-    const debugUrl = `${baseUrl}/api/debug-env`;
-
     console.error('Failed to exchange code for token:', err.message);
+    const appBaseUrl = process.env.APP_BASE_URL || '[NON IMPOSTATA]';
     return renderErrorPage(
         'Errore di Autenticazione', 
         `Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un 'redirect_uri_mismatch'.
-        <br/><br/><b>AZIONE RICHIESTA:</b>
-        <br/>1. Visita la pagina di debug per questo deploy per trovare l'URI corretto: <a href="${debugUrl}" target="_blank">${debugUrl}</a>
-        <br/>2. Copia l'URI che trovi in quella pagina.
-        <br/>3. Incolla l'URI nella lista degli "URI di reindirizzamento autorizzati" nella tua Google Cloud Console.`
+        <br/><br/><b>VERIFICA QUESTI PUNTI:</b>
+        <br/>1. La variabile d'ambiente <code>APP_BASE_URL</code> in Vercel deve essere: <code>https://semantic-interlinker-app.vercel.app</code>
+        <br/>2. L'URI di reindirizzamento autorizzato in Google Cloud Console deve essere: <code>https://semantic-interlinker-app.vercel.app/api/gsc/callback</code>`
     );
   }
 }

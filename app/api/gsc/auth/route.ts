@@ -3,23 +3,6 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Helper function to get the base URL
-function getBaseUrl(req: NextRequest): string {
-    // Vercel system env var for the deployment's URL
-    if (process.env.VERCEL_URL) {
-        return `https://${process.env.VERCEL_URL}`;
-    }
-    // Fallback for local development or other environments
-    const host = req.headers.get('host');
-    // For local dev, req.headers.get('host') is 'localhost:3000'
-    // For production, it's the domain. We assume https for non-local.
-    const protocol = host?.includes('localhost') ? 'http' : 'https';
-    if (!host) {
-        throw new Error("Could not determine the host from the request headers.");
-    }
-    return `${protocol}://${host}`;
-}
-
 const renderErrorPage = (title: string, message: string) => {
   return new Response(
     `<!DOCTYPE html>
@@ -54,7 +37,8 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
-  
+  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
+
   if (missingVars.length > 0) {
     const errorMessage = `Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>. Per favore, configurale nelle impostazioni del tuo provider di hosting (es. Vercel) per procedere.`;
     return renderErrorPage(
@@ -64,7 +48,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = process.env.APP_BASE_URL;
     const redirectUri = `${baseUrl}/api/gsc/callback`;
     
     const oauth2Client = new google.auth.OAuth2(
