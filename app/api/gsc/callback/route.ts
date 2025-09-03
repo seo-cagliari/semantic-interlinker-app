@@ -97,20 +97,26 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error('Failed to exchange code for token:', err.message);
     
-    // This is the EXACT URI that was used in the failed request.
     const redirectUriUsed = `${process.env.APP_BASE_URL}/api/gsc/callback`;
+    const clientIdUsed = process.env.GOOGLE_CLIENT_ID;
 
     return renderErrorPage(
         'Errore di Autenticazione', 
         `<p>Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un <b>'redirect_uri_mismatch'</b>.</p>
-        <p>L'applicazione ha usato questo esatto URI di reindirizzamento durante il tentativo:</p>
+        <p>Verifica che la tua configurazione su Google Cloud Console corrisponda <b>ESATTAMENTE</b> ai seguenti valori usati dal server:</p>
+        <br/>
+        <p><b>Client ID in uso:</b></p>
+        <code style="font-size: 1.1rem; padding: 0.5rem; display: block; margin-top: 0.5rem; user-select: all; word-break: break-all;">${clientIdUsed}</code>
+        <br/>
+        <p><b>URI di Reindirizzamento in uso:</b></p>
         <code style="font-size: 1.1rem; padding: 0.5rem; display: block; margin-top: 0.5rem; user-select: all; word-break: break-all;">${redirectUriUsed}</code>
         <br/>
         <p><b>SOLUZIONE INFALLIBILE:</b></p>
         <ol style="padding-left: 1.5rem; margin-top: 0.5rem;">
-          <li>Seleziona e copia l'intero URI qui sopra.</li>
-          <li>Vai alla <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> e trova il tuo Client ID OAuth.</li>
-          <li>Incolla questo URI nella lista degli "URI di reindirizzamento autorizzati". Assicurati che corrisponda <b>esattamente</b>.</li>
+          <li>Vai alla <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>.</li>
+          <li>Trova il Client ID OAuth che corrisponde a quello mostrato sopra.</li>
+          <li>Seleziona e copia l'<b>URI di Reindirizzamento</b> mostrato sopra.</li>
+          <li>Incollalo nella lista degli "URI di reindirizzamento autorizzati" per quel Client ID. Assicurati che sia l'unico URI e che corrisponda esattamente.</li>
         </ol>
         <p>Questo risolverà il problema.</p>`
     );
