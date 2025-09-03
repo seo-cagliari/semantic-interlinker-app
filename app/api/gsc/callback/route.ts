@@ -4,20 +4,7 @@ import { serialize } from 'cookie';
 
 export const runtime = 'nodejs';
 
-const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: string) => {
-  const title = status === 'success' ? 'Autenticazione Riuscita' : 'Errore di Autenticazione';
-  const script = status === 'success' && baseUrl
-    ? `<script>
-        if (window.opener) {
-          // Send the success status AND the base URL to the opener window.
-          // The opener will use the base URL to redirect itself, ensuring it's on the correct domain.
-          window.opener.postMessage({ status: 'auth_success', baseUrl: '${baseUrl}' }, '*');
-        }
-        // Give a moment for the message to be sent before closing.
-        setTimeout(() => window.close(), 300);
-      </script>`
-    : '';
-
+const renderErrorPage = (title: string, message: string) => {
   return new Response(
     `<!DOCTYPE html>
     <html lang="en">
@@ -28,7 +15,7 @@ const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: str
       <style>
         body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f8fafc; color: #334155; }
         .container { text-align: center; background-color: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); max-width: 600px; }
-        h1 { color: ${status === 'success' ? '#166534' : '#b91c1c'}; }
+        h1 { color: #b91c1c; }
         p { margin-bottom: 1rem; }
         code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; }
       </style>
@@ -36,12 +23,12 @@ const renderPage = (status: 'success' | 'error', message?: string, baseUrl?: str
     <body>
       <div class="container">
         <h1>${title}</h1>
-        <p>${message || (status === 'success' ? 'Autenticazione completata con successo. Questa finestra si chiuderà automaticamente.' : 'Si è verificato un errore imprevisto.')}</p>
+        <p>${message}</p>
       </div>
-      ${script}
     </body>
     </html>`,
     {
+      status: 500,
       headers: { 'Content-Type': 'text/html' },
     }
   );
@@ -54,11 +41,11 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     console.error('Google OAuth Error:', error);
-    return renderPage('error', `Google ha restituito un errore: ${error}`);
+    return renderErrorPage('Errore di Autenticazione', `Google ha restituito un errore: ${error}`);
   }
   
   if (!code) {
-    return renderPage('error', 'Il codice di autorizzazione di Google non è stato trovato nella richiesta.');
+    return renderErrorPage('Errore di Autenticazione', 'Il codice di autorizzazione di Google non è stato trovato nella richiesta.');
   }
   
   const missingVars = [];
@@ -72,12 +59,12 @@ export async function GET(req: NextRequest) {
         errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL di produzione stabile della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
     }
     console.error('Callback Error:', errorMessage);
-    return renderPage('error', errorMessage);
+    return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
 
-  // Explicit check to satisfy TypeScript's strict null checks and fix the build error
+  // Explicit check to satisfy TypeScript's strict null checks
   if (!process.env.APP_BASE_URL) {
-      return renderPage('error', 'Errore critico: APP_BASE_URL non è definito anche dopo il controllo. La configurazione del server è incompleta.');
+      return renderErrorPage('Errore Critico del Server', 'La variabile APP_BASE_URL non è definita, la configurazione è incompleta.');
   }
 
   const baseUrl = process.env.APP_BASE_URL;
@@ -92,7 +79,6 @@ export async function GET(req: NextRequest) {
 
     const { tokens } = await oauth2Client.getToken(code);
     
-    // Extract the hostname for the cookie domain - this is now safe
     const url = new URL(baseUrl);
     const domain = url.hostname;
 
@@ -101,15 +87,15 @@ export async function GET(req: NextRequest) {
       secure: process.env.NODE_ENV !== 'development',
       maxAge: 60 * 60 * 24 * 30, // 30 giorni
       path: '/',
-      domain: domain // Set the cookie on the base domain to be available across subdomains
+      domain: domain
     });
     
-    const response = renderPage('success', undefined, baseUrl);
+    const response = Response.redirect(baseUrl, 302); // 302 Temporary Redirect
     response.headers.set('Set-Cookie', cookie);
     return response;
 
   } catch (err: any) {
     console.error('Failed to exchange code for token:', err.message);
-    return renderPage('error', `Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un 'redirect_uri_mismatch'.<br/><br/><b>VERIFICA QUESTI PUNTI:</b><br/>1. La variabile d'ambiente <code>APP_BASE_URL</code> in Vercel deve essere: <code>${baseUrl}</code><br/>2. L'URI di reindirizzamento autorizzato in Google Cloud Console deve essere: <code>${redirectUri}</code>`);
+    return renderErrorPage('Errore di Autenticazione', `Impossibile scambiare il codice di autorizzazione. Questo è quasi sempre causato da un 'redirect_uri_mismatch'.<br/><br/><b>VERIFICA QUESTI PUNTI:</b><br/>1. La variabile d'ambiente <code>APP_BASE_URL</code> in Vercel deve essere: <code>${baseUrl}</code><br/>2. L'URI di reindirizzamento autorizzato in Google Cloud Console deve essere: <code>${redirectUri}</code>`);
   }
 }

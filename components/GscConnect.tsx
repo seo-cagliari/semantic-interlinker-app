@@ -11,9 +11,8 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAnalysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-
 
   const checkAuthStatus = useCallback(async () => {
     setError(null);
@@ -42,49 +41,13 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     checkAuthStatus();
   }, [checkAuthStatus]);
 
-  const handleConnect = () => {
-    setIsAuthenticating(true);
-    const authUrl = '/api/gsc/auth';
-    const authWindow = window.open(authUrl, '_blank', 'width=600,height=700,noreferrer');
-
-    const handleMessage = (event: MessageEvent) => {
-        // Security: a simple check for the message structure and origin.
-        if (event.data && event.data.status === 'auth_success' && typeof event.data.baseUrl === 'string') {
-            // This is the success signal from our popup.
-            // The only reliable way to use the new session cookie is to be on the domain it was set for.
-            // So, we redirect the main window to the stable production URL.
-            window.location.href = event.data.baseUrl;
-            
-            // The page will navigate away, but we can still try to clean up.
-            if (authWindow) authWindow.close();
-            window.removeEventListener('message', handleMessage);
-            if (pollInterval) clearInterval(pollInterval);
-        }
-    };
-
-    window.addEventListener('message', handleMessage);
-
-    // Fallback polling mechanism in case postMessage fails or window is closed manually.
-    const pollInterval = setInterval(() => {
-        if (authWindow && authWindow.closed) {
-            clearInterval(pollInterval);
-            window.removeEventListener('message', handleMessage);
-            // The popup closed without sending a message. We can't redirect.
-            // Our only option is to stop waiting and re-check the auth status.
-            // This may or may not work depending on cookie domain policies, but it's the best we can do to avoid getting stuck.
-            setIsAuthenticating(false);
-            checkAuthStatus();
-        }
-    }, 1000);
-  };
-
 
   const handleStartAnalysis = async () => {
     if (!selectedGscSite) {
       setError("Seleziona una proprietà di GSC da analizzare.");
       return;
     }
-    setIsLoading(true);
+    setAnalysisLoading(true);
     setError(null);
     
     try {
@@ -101,11 +64,11 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
       onAnalysisStart(selectedGscSite, data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Si è verificato un errore imprevisto.');
-      setIsLoading(false);
+      setAnalysisLoading(false);
     }
   };
 
-  if (isLoading && isAuthenticated === null) {
+  if (isLoading) {
       return (
         <div className="text-center py-12">
             <LoadingSpinnerIcon className="w-8 h-8 mx-auto text-slate-400" />
@@ -123,14 +86,13 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         {!isAuthenticated ? (
           <div>
             <p className="text-slate-600 mb-4">È richiesto l'accesso per leggere i dati del tuo sito da Google Search Console.</p>
-            <button 
-              onClick={handleConnect}
-              disabled={isAuthenticating}
-              className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors border border-blue-700 disabled:bg-blue-400"
+            <a 
+              href="/api/gsc/auth"
+              className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors border border-blue-700"
             >
-              {isAuthenticating ? <LoadingSpinnerIcon className="w-5 h-5"/> : <GoogleGIcon className="w-5 h-s" />}
-              {isAuthenticating ? 'In attesa di Google...' : 'Collega Google Search Console'}
-            </button>
+              <GoogleGIcon className="w-5 h-5" />
+              Collega Google Search Console
+            </a>
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -148,10 +110,10 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
             </select>
             <button
               onClick={handleStartAnalysis}
-              disabled={!selectedGscSite || isLoading}
+              disabled={!selectedGscSite || isAnalysisLoading}
               className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <LinkIcon className="w-5 h-5" />
+              {isAnalysisLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <LinkIcon className="w-5 h-5" />}
               Analizza Sito
             </button>
           </div>
