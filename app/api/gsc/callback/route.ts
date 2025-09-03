@@ -72,6 +72,11 @@ export async function GET(req: NextRequest) {
     return renderPage('error', errorMessage);
   }
 
+  // Explicit check to satisfy TypeScript's strict null checks and fix the build error
+  if (!process.env.APP_BASE_URL) {
+      return renderPage('error', 'Errore critico: APP_BASE_URL non è definito anche dopo il controllo. La configurazione del server è incompleta.');
+  }
+
   const baseUrl = process.env.APP_BASE_URL;
   const redirectUri = `${baseUrl}/api/gsc/callback`;
   
@@ -84,7 +89,7 @@ export async function GET(req: NextRequest) {
 
     const { tokens } = await oauth2Client.getToken(code);
     
-    // Extract the hostname for the cookie domain
+    // Extract the hostname for the cookie domain - this is now safe
     const url = new URL(baseUrl);
     const domain = url.hostname;
 

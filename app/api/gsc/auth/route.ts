@@ -49,6 +49,11 @@ export async function GET(req: NextRequest) {
       errorMessage
     );
   }
+
+  // Explicit check to satisfy TypeScript's strict null checks
+  if (!process.env.APP_BASE_URL) {
+      return renderErrorPage('Errore Critico del Server', 'La variabile APP_BASE_URL non è definita, la configurazione è incompleta.');
+  }
   
   const baseUrl = process.env.APP_BASE_URL;
   const redirectUri = `${baseUrl}/api/gsc/callback`;
