@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { useSearchParams, useRouter } from 'next/navigation';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
@@ -60,9 +59,6 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
 );
 
 const AppContent: React.FC = () => {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,54 +79,6 @@ const AppContent: React.FC = () => {
   
   // State for GSC data
   const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
-
-  // State for the new auth flow
-  const [isExchangingCode, setIsExchangingCode] = useState(false);
-
-  useEffect(() => {
-    const code = searchParams.get('code');
-    const errorParam = searchParams.get('error');
-
-    // Clean the URL immediately
-    if (code || errorParam) {
-        const newPath = window.location.pathname;
-        window.history.replaceState({}, '', newPath);
-    }
-    
-    if (errorParam) {
-        setError(errorParam);
-        return;
-    }
-
-    if (code) {
-        setIsExchangingCode(true);
-        setError(null);
-
-        const exchangeCodeForToken = async (authCode: string) => {
-            try {
-                const response = await fetch('/api/gsc/exchange-code', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code: authCode }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.details || errorData.error || 'Failed to exchange code for token.');
-                }
-                
-                // Success! The cookie is set. isExchangingCode will be set to false,
-                // which will trigger GscConnect to re-check auth status.
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'An unknown error occurred during authentication.');
-            } finally {
-                setIsExchangingCode(false);
-            }
-        };
-        exchangeCodeForToken(code);
-    }
-  }, [searchParams, router]);
-
 
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[]) => {
     setIsLoading(true);
@@ -332,7 +280,7 @@ const AppContent: React.FC = () => {
 
         <main>
           {!report && !isLoading && !error && (
-            <GscConnect onAnalysisStart={handleStartAnalysis} isExchangingCode={isExchangingCode} />
+            <GscConnect onAnalysisStart={handleStartAnalysis} />
           )}
 
           {isLoading && (
