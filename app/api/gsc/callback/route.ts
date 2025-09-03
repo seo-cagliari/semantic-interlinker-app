@@ -4,15 +4,6 @@ import { serialize } from 'cookie';
 
 export const runtime = 'nodejs';
 
-const getBaseUrl = (req: NextRequest): string => {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const host = req.headers.get('host');
-  return `${protocol}://${host}`;
-};
-
 const renderPage = (status: 'success' | 'error', message?: string) => {
   const title = status === 'success' ? 'Autenticazione Riuscita' : 'Errore di Autenticazione';
   const script = status === 'success'
@@ -36,6 +27,7 @@ const renderPage = (status: 'success' | 'error', message?: string) => {
         .container { text-align: center; background-color: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); max-width: 600px; }
         h1 { color: ${status === 'success' ? '#166534' : '#b91c1c'}; }
         p { margin-bottom: 1rem; }
+        code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: monospace; }
       </style>
     </head>
     <body>
@@ -69,14 +61,18 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
+  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
 
   if (missingVars.length > 0) {
-    const errorMsg = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: ${missingVars.join(', ')}.`;
-    console.error('Callback Error:', errorMsg);
-    return renderPage('error', errorMsg);
+    let errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
+     if (missingVars.includes('APP_BASE_URL')) {
+        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL completo della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
+    }
+    console.error('Callback Error:', errorMessage);
+    return renderPage('error', errorMessage);
   }
 
-  const baseUrl = getBaseUrl(req);
+  const baseUrl = process.env.APP_BASE_URL;
   const redirectUri = `${baseUrl}/api/gsc/callback`;
   
   try {
@@ -101,6 +97,6 @@ export async function GET(req: NextRequest) {
 
   } catch (err: any) {
     console.error('Failed to exchange code for token:', err.message);
-    return renderPage('error', `Impossibile scambiare il codice di autorizzazione. Dettagli: ${err.message}`);
+    return renderPage('error', `Impossibile scambiare il codice di autorizzazione. Questo è spesso causato da un 'redirect_uri_mismatch'. Assicurati che il tuo URL di base (<code>${baseUrl}</code>) e l'URI di reindirizzamento (<code>${redirectUri}</code>) siano configurati correttamente nella Google Cloud Console. Dettagli: ${err.message}`);
   }
 }

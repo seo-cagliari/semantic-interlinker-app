@@ -3,21 +3,6 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 
-/**
- * Determina l'URL di base dell'applicazione in modo affidabile.
- * L'ordine di priorità è:
- * 1. Variabile d'ambiente VERCEL_URL (per i deploy su Vercel).
- * 2. Header della richiesta (per lo sviluppo locale e altre piattaforme).
- */
-const getBaseUrl = (req: NextRequest): string => {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
-  }
-  const protocol = req.headers.get('x-forwarded-proto') || 'http';
-  const host = req.headers.get('host');
-  return `${protocol}://${host}`;
-};
-
 const renderErrorPage = (title: string, message: string) => {
   return new Response(
     `<!DOCTYPE html>
@@ -52,15 +37,20 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
-  
+  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
+
   if (missingVars.length > 0) {
+    let errorMessage = `Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>. Per favore, configurale nelle impostazioni del tuo provider di hosting (es. Vercel) per procedere.`;
+    if (missingVars.includes('APP_BASE_URL')) {
+        errorMessage += `<br/><br/>La variabile <code>APP_BASE_URL</code> deve essere l'URL completo della tua applicazione (es. <code>https://your-app.vercel.app</code>), senza lo slash finale.`;
+    }
     return renderErrorPage(
       'Errore di Configurazione del Server',
-      `Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>. Per favore, configurale nelle impostazioni del tuo provider di hosting (es. Vercel) per procedere.`
+      errorMessage
     );
   }
-
-  const baseUrl = getBaseUrl(req);
+  
+  const baseUrl = process.env.APP_BASE_URL;
   const redirectUri = `${baseUrl}/api/gsc/callback`;
   
   const oauth2Client = new google.auth.OAuth2(
