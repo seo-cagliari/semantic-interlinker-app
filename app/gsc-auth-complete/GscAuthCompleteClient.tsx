@@ -35,8 +35,8 @@ export const GscAuthCompleteClient: React.FC = () => {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Scambio del token fallito.');
+          const errorData = await response.json().catch(() => ({error: 'The server returned an unreadable error.'}));
+          throw new Error(errorData.details || errorData.error || 'Scambio del token fallito.');
         }
         
         setStatus(Status.SUCCESS);
@@ -77,7 +77,7 @@ export const GscAuthCompleteClient: React.FC = () => {
           <>
             <XCircleIcon className="w-12 h-12 text-red-500 mb-4" />
             <h1 className="text-xl font-semibold text-slate-800">Autenticazione Fallita</h1>
-            <p className="text-red-600 bg-red-50 p-2 rounded-md">{error}</p>
+            <p className="text-red-600 bg-red-50 p-2 rounded-md text-sm">{error}</p>
             <p className="text-slate-500 mt-4">Puoi chiudere questa finestra e riprovare.</p>
           </>
         );

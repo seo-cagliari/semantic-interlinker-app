@@ -4,12 +4,15 @@ import { parseCookies } from 'nookies';
 
 export const runtime = 'nodejs';
 
-const OAUTH2_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const OAUTH2_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-
 export async function POST(req: NextRequest) {
-    if (!OAUTH2_CLIENT_ID || !OAUTH2_CLIENT_SECRET) {
-        return Response.json({ error: 'Google OAuth credentials are not configured.' }, { status: 500 });
+    const missingVars = [];
+    if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
+    if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
+
+    if (missingVars.length > 0) {
+        const errorMsg = `The following server environment variables are not configured: ${missingVars.join(', ')}. Please configure them in your hosting provider's settings (e.g., Vercel).`;
+        console.error('GSC Query Error:', errorMsg);
+        return Response.json({ error: 'Server configuration error.', details: errorMsg }, { status: 500 });
     }
     
     const { siteUrl } = await req.json();
@@ -25,8 +28,8 @@ export async function POST(req: NextRequest) {
 
     try {
         const oauth2Client = new google.auth.OAuth2(
-            OAUTH2_CLIENT_ID,
-            OAUTH2_CLIENT_SECRET
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
         );
         oauth2Client.setCredentials(JSON.parse(token));
 

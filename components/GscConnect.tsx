@@ -26,7 +26,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         setIsAuthenticated(true);
       } else {
         const errorData = await response.json().catch(() => ({error: 'Authentication failed.'}));
-        throw new Error(errorData.error || 'Autenticazione fallita.');
+        throw new Error(errorData.details || errorData.error || 'Autenticazione fallita.');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossibile verificare lo stato di autenticazione.');
@@ -67,7 +67,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({error: 'Failed to retrieve GSC data.'}));
-        throw new Error(errorData.error || 'Impossibile recuperare i dati da GSC.');
+        throw new Error(errorData.details || errorData.error || 'Impossibile recuperare i dati da GSC.');
       }
       const data: GscDataRow[] = await response.json();
       onAnalysisStart(selectedGscSite, data);
@@ -125,8 +125,8 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
           </div>
         )}
         {error && 
-          <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
-            <XCircleIcon className="w-5 h-5" />
+          <div className="mt-4 flex items-center justify-center gap-2 text-red-600 text-left">
+            <XCircleIcon className="w-5 h-5 shrink-0" />
             <p className="text-sm">{error}</p>
           </div>
         }

@@ -3,14 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs'; // Force Node.js runtime to access secret env vars
 
-const OAUTH2_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const OAUTH2_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const OAUTH2_REDIRECT_URI = process.env.NEXT_PUBLIC_GSC_REDIRECT_URI;
-
 export async function POST(req: NextRequest) {
-    if (!OAUTH2_CLIENT_ID || !OAUTH2_CLIENT_SECRET || !OAUTH2_REDIRECT_URI) {
-        console.error("GSC credentials missing in exchange-token route");
-        return NextResponse.json({ error: 'Google OAuth credentials are not configured on the server.' }, { status: 500 });
+    const missingVars = [];
+    if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
+    if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
+    if (!process.env.NEXT_PUBLIC_GSC_REDIRECT_URI) missingVars.push('NEXT_PUBLIC_GSC_REDIRECT_URI');
+
+    if (missingVars.length > 0) {
+        const errorMsg = `The following server environment variables are not configured: ${missingVars.join(', ')}. Please configure them in your hosting provider's settings (e.g., Vercel).`;
+        console.error("GSC credentials missing in exchange-token route:", errorMsg);
+        return NextResponse.json({ error: 'Server configuration error.', details: errorMsg }, { status: 500 });
     }
 
     try {
@@ -21,9 +23,9 @@ export async function POST(req: NextRequest) {
         }
 
         const oauth2Client = new google.auth.OAuth2(
-            OAUTH2_CLIENT_ID,
-            OAUTH2_CLIENT_SECRET,
-            OAUTH2_REDIRECT_URI
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            process.env.NEXT_PUBLIC_GSC_REDIRECT_URI
         );
 
         const { tokens } = await oauth2Client.getToken(code);
@@ -43,6 +45,6 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('Error exchanging authorization code for token:', error);
-        return NextResponse.json({ error: 'Failed to authenticate with Google.' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to authenticate with Google.', details: 'The provided authorization code might be invalid or expired, or there could be a mismatch in the OAuth client configuration (e.g., redirect URI).' }, { status: 500 });
     }
 }
