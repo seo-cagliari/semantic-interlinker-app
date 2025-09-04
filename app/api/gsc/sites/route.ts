@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { NextRequest } from 'next/server';
-import { parseCookies } from 'nookies';
+import { parse } from 'cookie';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'Server configuration error.', details: errorMsg }, { status: 500 });
   }
 
-  const cookies = parseCookies({ req });
+  const cookieHeader = req.headers.get('cookie');
+  const cookies = cookieHeader ? parse(cookieHeader) : {};
   const token = cookies.gsc_token;
 
   if (!token) {

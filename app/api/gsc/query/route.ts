@@ -1,6 +1,6 @@
 import { google, searchconsole_v1 } from 'googleapis';
 import { NextRequest } from 'next/server';
-import { parseCookies } from 'nookies';
+import { parse } from 'cookie';
 
 export const runtime = 'nodejs';
 
@@ -20,7 +20,8 @@ export async function POST(req: NextRequest) {
         return Response.json({ error: 'siteUrl is required.' }, { status: 400 });
     }
 
-    const cookies = parseCookies({ req });
+    const cookieHeader = req.headers.get('cookie');
+    const cookies = cookieHeader ? parse(cookieHeader) : {};
     const token = cookies.gsc_token;
     if (!token) {
         return Response.json({ error: 'Not authenticated.' }, { status: 401 });
