@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport, OpportunityPage } from '../../types';
 import { SuggestionCard } from '../../components/SuggestionCard';
@@ -82,6 +82,7 @@ const AppContent: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   const [loadingMessage, setLoadingMessage] = useState<string>('');
+  const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
@@ -103,26 +104,30 @@ const AppContent: React.FC = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | undefined;
+    const cleanup = () => {
+      if (loadingIntervalRef.current) {
+        clearInterval(loadingIntervalRef.current);
+        loadingIntervalRef.current = null;
+      }
+    };
+
     if (isLoading) {
       let messageIndex = 0;
       setLoadingMessage(loadingMessages[0]);
       
-      intervalId = setInterval(() => {
-        messageIndex = messageIndex + 1;
+      loadingIntervalRef.current = setInterval(() => {
+        messageIndex++;
         if (messageIndex < loadingMessages.length) {
           setLoadingMessage(loadingMessages[messageIndex]);
         } else {
-          clearInterval(intervalId);
+          cleanup();
         }
       }, 3000);
+    } else {
+      cleanup();
     }
     
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
+    return cleanup;
   }, [isLoading]);
 
   useEffect(() => {

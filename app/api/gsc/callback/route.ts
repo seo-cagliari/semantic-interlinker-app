@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
     return new Response(null, {
       status: 302, // Found (Redirect)
       headers: {
-        'Location': baseUrl,
+        'Location': `${baseUrl}/dashboard`,
         'Set-Cookie': cookie,
       },
     });
