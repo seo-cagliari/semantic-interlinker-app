@@ -4,7 +4,7 @@ import { serialize } from 'cookie';
 export const runtime = 'nodejs';
 
 const renderErrorPage = (title: string, message: string, rawError?: any) => {
-  const rawErrorHtml = rawError 
+  const rawErrorHtml = rawError && Object.keys(rawError).length > 0
     ? `<h3>Dati di Errore Grezzi da Google</h3>
        <p>Questa è la risposta esatta ricevuta dal server di Google, senza filtri. La vera causa dell'errore si trova qui.</p>
        <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>` 
@@ -125,19 +125,55 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error('Raw error during Google Token exchange:', err);
     
-    const message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>
-                     <p>Questo di solito indica un problema di configurazione nel tuo progetto Google Cloud. Analizza la risposta grezza qui sotto per identificare la causa del problema.</p>
-                     <p><b>Cause comuni:</b></p>
+    let message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>
+                     <p>Questo di solito indica un problema di configurazione nel tuo progetto Google Cloud. Analizza la risposta grezza qui sotto per identificare la causa del problema.</p>`;
+
+    if (err.error === 'redirect_uri_mismatch') {
+        message += `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
+                    <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
+                    <p><b>VERIFICA QUESTI VALORI:</b></p>
+                    <ul>
+                        <li><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code></li>
+                        <li>Assicurati che questo esatto valore sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
+                    </ul>`;
+    } else if (err.error === 'invalid_client') {
+        message += `<h3>Diagnosi Specifica: <code>invalid_client</code></h3>
+                    <p>L'autenticazione del client è fallita. Questo quasi sempre significa che il <b>Client Secret</b> non è corretto.</p>
+                    <p><b>AZIONE RICHIESTA:</b></p>
+                    <ul>
+                        <li>Vai alla tua <a href="https://console.cloud.google.com/apis/credentials" target="_blank">pagina delle credenziali di Google Cloud</a>.</li>
+                        <li>Verifica che la variabile d'ambiente <code>GOOGLE_CLIENT_SECRET</code> nel tuo hosting corrisponda esattamente al valore mostrato per il tuo ID client OAuth.</li>
+                        <li>Se hai rigenerato il secret di recente, assicurati di aver aggiornato la variabile d'ambiente.</li>
+                    </ul>`;
+    } else {
+       message += `<p><b>Altre cause comuni:</b></p>
                      <ul>
-                        <li><b><code>invalid_client</code>:</b> Il <code>GOOGLE_CLIENT_SECRET</code> non è corretto.</li>
                         <li><b><code>invalid_grant</code>:</b> Il codice di autorizzazione (<code>code</code>) è scaduto o non valido. Prova a ricollegarti.</li>
-                        <li><b><code>redirect_uri_mismatch</code>:</b> L'URI di reindirizzamento non corrisponde esattamente a quello configurato in Google Cloud Console.</li>
                      </ul>`;
+    }
+
+    // Create a serializable object from the error to ensure it's displayed correctly.
+    const serializableError = {
+        error: err.error,
+        error_description: err.error_description,
+        error_uri: err.error_uri,
+        raw_response: err.raw_response,
+        name: err.name,
+        message: err.message,
+    };
+
+    // Filter out undefined/null properties for a cleaner display
+    const finalErrorObject = Object.entries(serializableError).reduce((acc, [key, value]) => {
+        if (value) {
+            acc[key] = value;
+        }
+        return acc;
+    }, {} as Record<string, any>);
 
     return renderErrorPage(
-        'Errore Scambio Token OAuth', 
+        'Errore di Autenticazione (Diagnosi Avanzata)', 
         message,
-        err
+        finalErrorObject
     );
   }
 }
