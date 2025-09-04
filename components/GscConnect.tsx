@@ -50,6 +50,12 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     setAnalysisLoading(true);
     setError(null);
     
+    // Normalize sc-domain URLs to valid HTTPS URLs for analysis
+    let finalSiteUrl = selectedGscSite;
+    if (finalSiteUrl.startsWith('sc-domain:')) {
+      finalSiteUrl = `https://${finalSiteUrl.substring(10)}`;
+    }
+
     try {
       const response = await fetch('/api/gsc/query', {
         method: 'POST',
@@ -61,10 +67,22 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         throw new Error(errorData.details || errorData.error || 'Impossibile recuperare i dati da GSC.');
       }
       const data: GscDataRow[] = await response.json();
-      onAnalysisStart(selectedGscSite, data);
+      onAnalysisStart(finalSiteUrl, data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Si è verificato un errore imprevisto.');
       setAnalysisLoading(false);
+    }
+  };
+  
+  const handleLogout = async () => {
+    setError(null);
+    try {
+      await fetch('/api/gsc/logout', { method: 'POST' });
+      setIsAuthenticated(false);
+      setSites([]);
+      setSelectedGscSite('');
+    } catch (err) {
+      setError('Disconnessione fallita. Riprova.');
     }
   };
 
@@ -95,27 +113,34 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
             </a>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-            <select
-              value={selectedGscSite}
-              onChange={(e) => setSelectedGscSite(e.target.value)}
-              disabled={sites.length === 0}
-              className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-            >
-              {sites.length > 0 ? (
-                sites.map(site => <option key={site.siteUrl} value={site.siteUrl}>{site.siteUrl}</option>)
-              ) : (
-                <option>Nessun sito trovato nel tuo account GSC.</option>
-              )}
-            </select>
-            <button
-              onClick={handleStartAnalysis}
-              disabled={!selectedGscSite || isAnalysisLoading}
-              className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isAnalysisLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <LinkIcon className="w-5 h-5" />}
-              Analizza Sito
-            </button>
+          <div>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+              <select
+                value={selectedGscSite}
+                onChange={(e) => setSelectedGscSite(e.target.value)}
+                disabled={sites.length === 0}
+                className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+              >
+                {sites.length > 0 ? (
+                  sites.map(site => <option key={site.siteUrl} value={site.siteUrl}>{site.siteUrl}</option>)
+                ) : (
+                  <option>Nessun sito trovato nel tuo account GSC.</option>
+                )}
+              </select>
+              <button
+                onClick={handleStartAnalysis}
+                disabled={!selectedGscSite || isAnalysisLoading}
+                className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isAnalysisLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <LinkIcon className="w-5 h-5" />}
+                Analizza Sito
+              </button>
+            </div>
+            <div className="mt-4">
+              <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700 hover:underline">
+                Disconnetti Account Google
+              </button>
+            </div>
           </div>
         )}
         {error && 

@@ -9,7 +9,7 @@ import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
 import { GscConnect } from '../components/GscConnect';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon } from '../components/Icons';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon } from '../components/Icons';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -180,8 +180,9 @@ const AppContent: React.FC = () => {
     if (!report) return null;
     return (
       <div className="mb-10">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
            <h2 className="text-3xl font-bold text-slate-800">Report Strategico</h2>
+           <div className="flex items-center gap-2">
             <button 
               onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
@@ -198,6 +199,14 @@ const AppContent: React.FC = () => {
                 </>
               )}
             </button>
+            <button
+                onClick={() => setReport(null)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+                <ArrowPathIcon className="w-5 h-5" />
+                Nuova Analisi
+            </button>
+           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           <div className="bg-slate-100 p-4 rounded-lg">
@@ -296,7 +305,7 @@ const AppContent: React.FC = () => {
               <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
               <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
               <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
-              <button onClick={() => { setError(null); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+              <button onClick={() => { setError(null); setReport(null); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
                   Riprova
               </button>
             </div>
