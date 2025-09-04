@@ -65,6 +65,9 @@ const AppContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
+  // State for dynamic loading message
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+
   // State for Modals
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
@@ -87,6 +90,43 @@ const AppContent: React.FC = () => {
   const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
+
+  const loadingMessages = [
+    "Avvio dell'analisi strategica...",
+    "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
+    "Calcolo dell'autorità interna per tutte le pagine del sito (es. 129 pagine)...",
+    "Orchestrazione dell'agente AI 'Information Architect'...",
+    "Raggruppamento delle pagine in cluster tematici per l'analisi...",
+    "Deploy dell'agente AI 'Semantic Linking Strategist'...",
+    "Identificazione delle opportunità di linking basate sui dati...",
+    "Attivazione dell'agente AI 'Content Strategist'...",
+    "Ricerca di 'content gap' e nuove opportunità editoriali...",
+    "Quasi finito, sto compilando il report finale...",
+  ];
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | undefined;
+    if (isLoading) {
+      let messageIndex = 0;
+      setLoadingMessage(loadingMessages[0]);
+      
+      intervalId = setInterval(() => {
+        messageIndex = messageIndex + 1;
+        if (messageIndex < loadingMessages.length) {
+          setLoadingMessage(loadingMessages[messageIndex]);
+        } else {
+          // Optional: keep showing the last message
+          clearInterval(intervalId);
+        }
+      }, 3000); // Change message every 3 seconds
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isLoading]);
 
   // Load saved report from localStorage on mount
   useEffect(() => {
@@ -384,7 +424,7 @@ const AppContent: React.FC = () => {
              <div className="text-center py-16 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
                 <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
-                <p className="text-slate-500 max-w-md">Sto interrogando i tuoi dati GSC e analizzando il sito per orchestrare gli agenti AI. Potrebbe richiedere un momento...</p>
+                <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>{loadingMessage}</p>
              </div>
           )}
 

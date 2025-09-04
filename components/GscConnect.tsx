@@ -10,14 +10,27 @@ interface GscConnectProps {
   progressError?: string | null;
 }
 
+const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
+
 export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
-  const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
+  const [seozoomApiKey, setSeozoomApiKey] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
+    }
+    return '';
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAnalysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
+    }
+  }, [seozoomApiKey]);
 
   const checkAuthStatus = useCallback(async () => {
     setError(null);
