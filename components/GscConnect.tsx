@@ -3,7 +3,7 @@ import { GscSite, GscDataRow, SavedReport } from '../types';
 import { LoadingSpinnerIcon, GoogleGIcon, LinkIcon, XCircleIcon, ClockIcon } from './Icons';
 
 interface GscConnectProps {
-  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[], gscSiteUrl: string) => void;
+  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string) => void;
   savedReport: SavedReport | null;
   onProgressCheck: () => void;
   isProgressLoading: boolean;
@@ -14,6 +14,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedRe
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
+  const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAnalysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +77,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedRe
         throw new Error(errorData.details || errorData.error || 'Impossibile recuperare i dati da GSC.');
       }
       const data: GscDataRow[] = await response.json();
-      onAnalysisStart(finalSiteUrl, data, selectedGscSite);
+      onAnalysisStart(finalSiteUrl, data, selectedGscSite, seozoomApiKey);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Si è verificato un errore imprevisto.');
       setAnalysisLoading(false);
@@ -145,27 +146,39 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedRe
           </div>
         ) : (
           <div>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center">
-              <select
-                value={selectedGscSite}
-                onChange={(e) => setSelectedGscSite(e.target.value)}
-                disabled={sites.length === 0}
-                className="w-full max-w-md px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-              >
-                {sites.length > 0 ? (
-                  sites.map(site => <option key={site.siteUrl} value={site.siteUrl}>{site.siteUrl}</option>)
-                ) : (
-                  <option>Nessun sito trovato nel tuo account GSC.</option>
-                )}
-              </select>
-              <button
-                onClick={handleStartAnalysis}
-                disabled={!selectedGscSite || isAnalysisLoading}
-                className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isAnalysisLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <LinkIcon className="w-5 h-5" />}
-                Analizza Sito
-              </button>
+            <div className="space-y-4">
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <select
+                    value={selectedGscSite}
+                    onChange={(e) => setSelectedGscSite(e.target.value)}
+                    disabled={sites.length === 0}
+                    className="w-full sm:col-span-2 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                  >
+                    {sites.length > 0 ? (
+                      sites.map(site => <option key={site.siteUrl} value={site.siteUrl}>{site.siteUrl}</option>)
+                    ) : (
+                      <option>Nessun sito trovato nel tuo account GSC.</option>
+                    )}
+                  </select>
+                   <button
+                    onClick={handleStartAnalysis}
+                    disabled={!selectedGscSite || isAnalysisLoading}
+                    className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isAnalysisLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <LinkIcon className="w-5 h-5" />}
+                    Analizza Sito
+                  </button>
+               </div>
+               <div>
+                  <input
+                    type="password"
+                    placeholder="Chiave API SEOZoom (Opzionale)"
+                    value={seozoomApiKey}
+                    onChange={(e) => setSeozoomApiKey(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white text-sm"
+                  />
+                  <p className="text-xs text-slate-400 mt-1 text-left">Fornendo la chiave arricchirai le opportunità di contenuto con dati di mercato.</p>
+               </div>
             </div>
             <div className="mt-4">
               <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700 hover:underline">

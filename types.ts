@@ -50,6 +50,10 @@ export type ContentGapSuggestion = {
   title: string;
   description: string;
   relevant_cluster: string;
+  target_query?: string;
+  search_volume?: number;
+  keyword_difficulty?: number;
+  search_intent?: string;
 };
 
 // --- Tipi per l'integrazione GSC ---

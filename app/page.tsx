@@ -106,7 +106,7 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string) => {
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string) => {
     setIsLoading(true);
     setReport(null);
     setError(null);
@@ -124,7 +124,8 @@ const AppContent: React.FC = () => {
           body: JSON.stringify({ 
             site_root: siteUrl,
             gscData: gscDataPayload,
-            gscSiteUrl: gscSiteUrl
+            gscSiteUrl: gscSiteUrl,
+            seozoomApiKey: seozoomApiKey
           })
         });
         

@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric } from '../../types';
 import { wp } from '../tools/wp';
+import { seozoom } from '../tools/seozoom';
 
 /**
  * Calcola un punteggio di autorità interna (stile PageRank) per ogni pagina.
@@ -65,6 +66,7 @@ export async function interlinkFlow(options: {
   site_root: string;
   gscData?: GscDataRow[];
   gscSiteUrl?: string;
+  seozoomApiKey?: string;
   applyDraft: boolean;
 }): Promise<Report> {
   console.log("Master Agent started with options:", options);
@@ -259,6 +261,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     ISTRUZIONI STRATEGICHE:
     - ANALIZZA LE QUERY DEBOLI: Cerca nei dati GSC le query per cui il sito ha visibilità (impressioni) ma scarso engagement (basso CTR) o per le quali nessuna pagina risponde in modo soddisfacente.
     - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli, per colmare le lacune di performance e aumentare l'autorità.
+    - Per ogni suggerimento, identifica la principale "target_query" (query di ricerca) che il nuovo contenuto dovrebbe targettizzare.
     - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
   `;
   const contentGapSchema = {
@@ -271,8 +274,10 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
                 properties: {
                     title: { type: Type.STRING },
                     description: { type: Type.STRING },
-                    relevant_cluster: { type: Type.STRING }
-                }
+                    relevant_cluster: { type: Type.STRING },
+                    target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." }
+                },
+                required: ["title", "description", "relevant_cluster", "target_query"]
             }
         }
     }
@@ -287,11 +292,41 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     });
     const responseText = contentGapResponse.text;
     if (responseText) {
-        contentGapSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
+        const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
+
+        if (options.seozoomApiKey && parsedSuggestions.length > 0) {
+            console.log(`Agent 3 complete. Identified ${parsedSuggestions.length} content opportunities. Enriching with SEOZoom data...`);
+            
+            const enrichmentPromises = parsedSuggestions.map(async (suggestion: ContentGapSuggestion) => {
+                if (suggestion.target_query) {
+                    try {
+                        const seoData = await seozoom.getKeywordData(suggestion.target_query, options.seozoomApiKey!);
+                        return {
+                            ...suggestion,
+                            search_volume: seoData.search_volume,
+                            keyword_difficulty: seoData.keyword_difficulty,
+                            search_intent: seoData.search_intent,
+                        };
+                    } catch (e) {
+                        console.error(`Failed to enrich suggestion for query "${suggestion.target_query}"`, e);
+                        return suggestion; // Return original suggestion on error
+                    }
+                }
+                return suggestion;
+            });
+
+            contentGapSuggestions = await Promise.all(enrichmentPromises);
+            console.log("SEOZoom enrichment complete.");
+        } else {
+            contentGapSuggestions = parsedSuggestions;
+            console.log(`Agent 3 complete. Identified ${contentGapSuggestions.length} content opportunities.`);
+        }
     }
-      console.log(`Agent 3 complete. Identified ${contentGapSuggestions.length} content opportunities.`);
   } catch(e) {
       console.error("Error during Content Gap Analysis phase:", e);
+      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+      // Non bloccare l'intero report se solo questa fase fallisce
+      console.warn(`Agent 3 (Content Strategist) failed. Proceeding without content gaps. Error: ${detailedError}`);
   }
   
   const finalReport: Report = {

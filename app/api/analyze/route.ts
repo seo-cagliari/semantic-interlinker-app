@@ -6,7 +6,12 @@ export const dynamic = 'force-dynamic'; // A convention for serverless functions
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { site_root, gscData, gscSiteUrl } = body as { site_root: string, gscData?: GscDataRow[], gscSiteUrl?: string };
+    const { site_root, gscData, gscSiteUrl, seozoomApiKey } = body as { 
+      site_root: string, 
+      gscData?: GscDataRow[], 
+      gscSiteUrl?: string,
+      seozoomApiKey?: string 
+    };
 
     if (!site_root) {
       return Response.json({ error: 'site_root is required in the request body.' }, { status: 400 });
@@ -16,6 +21,7 @@ export async function POST(req: Request) {
       site_root,
       gscData,
       gscSiteUrl,
+      seozoomApiKey,
       applyDraft: false
     });
 
