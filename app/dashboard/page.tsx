@@ -13,6 +13,8 @@ import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCirc
 import { ProgressReportModal } from '../../components/ProgressReportModal';
 
 type ViewMode = 'report' | 'visualizer';
+type StrategyOptions = { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
+
 
 const SiteVisualizer = dynamic(
   () => import('../../components/SiteVisualizer').then(mod => mod.SiteVisualizer),
@@ -144,7 +146,7 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string) => {
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => {
     setIsLoading(true);
     setReport(null);
     setError(null);
@@ -163,7 +165,8 @@ const AppContent: React.FC = () => {
             site_root: siteUrl,
             gscData: gscDataPayload,
             gscSiteUrl: gscSiteUrl,
-            seozoomApiKey: seozoomApiKey
+            seozoomApiKey: seozoomApiKey,
+            strategyOptions: strategyOptions
           })
         });
         

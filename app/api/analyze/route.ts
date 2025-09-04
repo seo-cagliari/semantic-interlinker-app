@@ -6,11 +6,12 @@ export const dynamic = 'force-dynamic'; // A convention for serverless functions
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { site_root, gscData, gscSiteUrl, seozoomApiKey } = body as { 
+    const { site_root, gscData, gscSiteUrl, seozoomApiKey, strategyOptions } = body as { 
       site_root: string, 
       gscData?: GscDataRow[], 
       gscSiteUrl?: string,
-      seozoomApiKey?: string 
+      seozoomApiKey?: string,
+      strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
     };
 
     if (!site_root) {
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
       gscData,
       gscSiteUrl,
       seozoomApiKey,
+      strategyOptions,
       applyDraft: false
     });
 

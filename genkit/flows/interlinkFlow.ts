@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, RiskChecks } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -112,6 +112,7 @@ export async function interlinkFlow(options: {
   gscData?: GscDataRow[];
   gscSiteUrl?: string;
   seozoomApiKey?: string;
+  strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
   applyDraft: boolean;
 }): Promise<Report> {
   console.log("Master Agent started with options:", options);
@@ -204,7 +205,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
 
   // --- AGENT 2: SEMANTIC LINKING STRATEGIST ---
   console.log("Master Agent deploying Agent 2: Semantic Linking Strategist...");
-  const suggestionPrompt = `
+  let suggestionPrompt = `
     Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}".
     
     CONTESTO:
@@ -215,15 +216,48 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     ${gscDataStringForPrompt}
 
     IL TUO COMPITO:
-    Genera un elenco di 10 suggerimenti di link interni ad alto impatto.
-
-    ISTRUZIONI STRATEGICHE:
-    - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR.
-    - DAI PRIORITÀ AI LINK DATA-DRIVEN: I tuoi suggerimenti migliori dovrebbero aiutare le pagine a posizionarsi meglio per queste "query opportunità".
-    - RAFFORZA I CLUSTER: Suggerisci link che rinforzino la coerenza dei cluster tematici.
-    - Fornisci tutti gli output testuali, inclusa la motivazione, in lingua italiana e rispetta lo schema JSON.
-    - I valori per risk_checks devono essere valori predefiniti sicuri. Imposta target_status a 200, e target_indexable e canonical_ok a true. L'AI non deve eseguire controlli live.
+    Genera un elenco di 10 suggerimenti di link interni ad alto impatto, seguendo la strategia definita.
   `;
+    
+  const strategy = options.strategyOptions?.strategy || 'global';
+  const targetUrls = options.strategyOptions?.targetUrls || [];
+
+  if (strategy === 'pillar' && targetUrls.length > 0) {
+      suggestionPrompt += `
+      MODALITÀ STRATEGICA: "Pillar Page"
+      OBIETTIVO PRIMARIO: Rafforzare l'autorità della seguente pagina pilastro: ${targetUrls[0]}
+      ISTRUZIONI SPECIFICHE:
+      - La maggior parte dei suggerimenti (almeno 7 su 10) devono essere link IN ENTRATA che puntano verso la pagina pilastro.
+      - Trova pagine di supporto semanticamente correlate ("cluster content") e suggerisci link da esse verso la pagina pilastro.
+      - Usa anchor text pertinenti che rafforzino il topic principale della pillar page.
+      `;
+  } else if (strategy === 'money' && targetUrls.length > 0) {
+      suggestionPrompt += `
+      MODALITÀ STRATEGICA: "Money Page"
+      OBIETTIVO PRIMARIO: Canalizzare autorità e traffico verso la seguente pagina commerciale: ${targetUrls[0]}
+      ISTRUZIONI SPECIFICHE:
+      - Identifica articoli informativi o pagine con alta autorità interna che siano tematicamente collegati alla money page.
+      - Suggerisci link contestuali DA queste pagine di supporto VERSO la money page per guidare l'utente nel funnel di conversione.
+      - La motivazione semantica deve riflettere questo obiettivo strategico.
+      `;
+  } else { // global
+      suggestionPrompt += `
+      MODALITÀ STRATEGICA: "Analisi Globale"
+      OBIETTIVO PRIMARIO: Identificare le migliori opportunità di linking in tutto il sito per migliorare il posizionamento generale.
+      ISTRUZIONI SPECIFICHE:
+      - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR.
+      - DAI PRIORITÀ AI LINK DATA-DRIVEN: I tuoi suggerimenti migliori dovrebbero aiutare le pagine a posizionarsi meglio per queste "query opportunità".
+      - RAFFORZA I CLUSTER: Suggerisci link che rinforzino la coerenza dei cluster tematici.
+      `;
+  }
+
+  suggestionPrompt += `
+    ISTRUZIONI AVANZATE (DA APPLICARE A TUTTI I SUGGERIMENTI):
+    1. ANALISI DELL'INTENTO: Per ogni suggerimento, valuta la compatibilità dell'intento di ricerca tra la pagina di origine e quella di destinazione (es. "Ottimo, da informativo a transazionale per guidare l'utente."). Aggiungi un commento su questo nel campo 'intent_alignment_comment'.
+    2. CONTROLLO CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali. Se rilevi un rischio significativo, imposta 'potential_cannibalization' a true e spiega brevemente il motivo in 'cannibalization_details'. Altrimenti, imposta a false.
+    3. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' come descritto.
+  `;
+
     const suggestionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -250,7 +284,15 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
               properties: {
                 topic_match: { type: Type.STRING },
                 entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
+                intent_alignment_comment: { type: Type.STRING, description: "Commento sulla coerenza dell'intento di ricerca." }
               },
+            },
+            risk_checks: {
+              type: Type.OBJECT,
+              properties: {
+                potential_cannibalization: { type: Type.BOOLEAN, description: "Indica se c'è un rischio di cannibalizzazione." },
+                cannibalization_details: { type: Type.STRING, description: "Spiegazione del rischio di cannibalizzazione." }
+              }
             },
             score: { type: Type.NUMBER },
             notes: { type: Type.STRING },
@@ -270,19 +312,21 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     });
     const responseText = suggestionResponse.text;
     if (responseText) {
-        // Add default risk checks programmatically
         const parsedSuggestions = JSON.parse(responseText.trim()).suggestions;
-        reportSuggestions = parsedSuggestions.map((s: Omit<Suggestion, 'risk_checks'>) => ({
+        reportSuggestions = parsedSuggestions.map((s: Partial<Suggestion>) => ({
             ...s,
+            suggestion_id: s.suggestion_id || `sugg-${Math.random()}`,
             risk_checks: {
                 target_status: 200,
                 target_indexable: true,
                 canonical_ok: true,
-                dup_anchor_in_block: false
+                dup_anchor_in_block: false,
+                potential_cannibalization: s.risk_checks?.potential_cannibalization ?? false,
+                cannibalization_details: s.risk_checks?.cannibalization_details ?? ''
             }
-        }));
+        }) as Suggestion);
     }
-      console.log(`Agent 2 complete. Generated ${reportSuggestions.length} linking suggestions.`);
+      console.log(`Agent 2 complete. Generated ${reportSuggestions.length} linking suggestions based on "${strategy}" strategy.`);
   } catch(e) {
       const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
       throw new Error(`Agent 2 (Semantic Linking Strategist) failed. Error: ${detailedError}`);

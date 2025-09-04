@@ -3,6 +3,8 @@ export type RiskChecks = {
   target_indexable: boolean;
   canonical_ok: boolean;
   dup_anchor_in_block: boolean;
+  potential_cannibalization?: boolean;
+  cannibalization_details?: string;
 };
 
 export type InsertionHint = {
@@ -21,6 +23,7 @@ export type Suggestion = {
   semantic_rationale: {
     topic_match: string;
     entities_in_common: string[];
+    intent_alignment_comment?: string;
   };
   risk_checks: RiskChecks;
   score: number;

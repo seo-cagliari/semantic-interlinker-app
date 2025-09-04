@@ -10,13 +10,21 @@ interface SuggestionCardProps {
   onToggleSelection: (suggestionId: string) => void;
 }
 
-const RiskCheckItem: React.FC<{ label: string; value: boolean }> = ({ label, value }) => (
-  <div className="flex items-center gap-1">
-    {value ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />}
-    <span>{label}:</span>
-    <span className={`font-medium ${value ? 'text-green-600' : 'text-red-600'}`}>{value ? 'Sì' : 'No'}</span>
-  </div>
-);
+// FIX: Added 'details' prop to RiskCheckItem to pass in extra information, resolving the 'suggestion' not defined error.
+const RiskCheckItem: React.FC<{ label: string; value: boolean; isWarning?: boolean; details?: string }> = ({ label, value, isWarning = false, details = '' }) => {
+    const Icon = value ? (isWarning ? ExclamationTriangleIcon : CheckCircleIcon) : CheckCircleIcon;
+    const colorClass = value ? (isWarning ? 'text-yellow-600' : 'text-green-600') : 'text-green-600';
+    const text = value ? (isWarning ? 'Rilevato' : 'Sì') : 'No';
+
+    return (
+        <div className="flex items-center gap-1" title={isWarning ? details : ''}>
+            <Icon className={`w-4 h-4 ${value ? (isWarning ? 'text-yellow-500' : 'text-green-500') : 'text-green-500'}`} />
+            <span>{label}:</span>
+            <span className={`font-medium ${colorClass}`}>{text}</span>
+        </div>
+    );
+};
+
 
 export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSelected, onViewJson, onViewModification, onToggleSelection }) => {
   const { 
@@ -78,6 +86,9 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
         </div>
         <div className="space-y-3 bg-slate-50 p-3 rounded-lg">
           <div><b className="font-semibold">Motivo Semantico:</b> {semantic_rationale.topic_match}</div>
+          {semantic_rationale.intent_alignment_comment && (
+            <div><b className="font-semibold">Analisi Intent:</b> <span className="text-slate-600">{semantic_rationale.intent_alignment_comment}</span></div>
+          )}
           <div><b className="font-semibold">Entità Comuni:</b> <span className="text-slate-600">{semantic_rationale.entities_in_common.join(", ")}</span></div>
         </div>
       </div>
@@ -88,6 +99,12 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
           <RiskCheckItem label="Stato" value={risk_checks.target_status === 200} />
           <RiskCheckItem label="Indicizzabile" value={risk_checks.target_indexable} />
           <RiskCheckItem label="Canonical OK" value={risk_checks.canonical_ok} />
+          <RiskCheckItem 
+            label="Cannibalizzazione" 
+            value={!!risk_checks.potential_cannibalization} 
+            isWarning={true}
+            details={risk_checks.cannibalization_details}
+          />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <button onClick={() => onViewModification(suggestion)} className="w-full md:w-auto flex-grow text-sm flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-700 transition-colors">
