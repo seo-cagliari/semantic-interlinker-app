@@ -68,6 +68,10 @@ export async function GET(req: NextRequest) {
   }
 
   const baseUrl = process.env.APP_BASE_URL;
+  if (!baseUrl) {
+    const errorMessage = `Errore di configurazione del server: La variabile d'ambiente APP_BASE_URL non è definita.`;
+    return renderErrorPage('Errore di Configurazione del Server', errorMessage);
+  }
   const redirectUri = `${baseUrl}/api/gsc/callback`;
   let tokens;
 
