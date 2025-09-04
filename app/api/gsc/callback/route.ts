@@ -118,9 +118,14 @@ export async function GET(req: NextRequest) {
       domain: domain
     });
     
-    const response = Response.redirect(baseUrl, 302);
-    response.headers.set('Set-Cookie', cookie);
-    return response;
+    // FIX: Construct the Response object with all headers at once to avoid immutable errors.
+    return new Response(null, {
+      status: 302, // Found (Redirect)
+      headers: {
+        'Location': baseUrl,
+        'Set-Cookie': cookie,
+      },
+    });
 
   } catch (err: any) {
     console.error('Raw error during Google Token exchange:', err);
