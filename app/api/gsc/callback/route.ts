@@ -23,6 +23,7 @@ const renderErrorPage = (title: string, message: string, rawError?: any) => {
         h1 { color: #b91c1c; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
         h3 { margin-top: 2rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;}
         p { margin-bottom: 1rem; }
+        ul { margin-left: 1.5rem; margin-bottom: 1rem; }
         code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #475569; user-select: all; word-break: break-all; }
         pre { background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap; word-break: break-all; }
       </style>
@@ -89,12 +90,22 @@ export async function GET(req: NextRequest) {
       }),
     });
 
-    tokens = await tokenResponse.json();
-
     if (!tokenResponse.ok) {
-        // This is the crucial change: we throw the entire raw token object on failure
-        throw tokens;
+        const errorText = await tokenResponse.text();
+        let errorPayload;
+        try {
+            errorPayload = JSON.parse(errorText);
+        } catch (e) {
+            errorPayload = { 
+                error: 'non_json_response', 
+                error_description: 'La risposta di errore da Google non era un JSON valido.',
+                raw_response: errorText 
+            };
+        }
+        throw errorPayload;
     }
+
+    tokens = await tokenResponse.json();
 
     const url = new URL(baseUrl);
     const domain = url.hostname;
@@ -112,15 +123,21 @@ export async function GET(req: NextRequest) {
     return response;
 
   } catch (err: any) {
-    console.error('Raw error from Google Token API:', err);
+    console.error('Raw error during Google Token exchange:', err);
     
-    const message = `<p><b>La tua configurazione è corretta.</b> L'errore <code>redirect_uri_mismatch</code> che hai visto in precedenza è fuorviante.</p>
-                     <p>Il server di Google sta restituendo un errore più profondo che abbiamo catturato. Analizza la risposta grezza qui sotto per identificare la vera causa del problema.</p>`;
+    const message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>
+                     <p>Questo di solito indica un problema di configurazione nel tuo progetto Google Cloud. Analizza la risposta grezza qui sotto per identificare la causa del problema.</p>
+                     <p><b>Cause comuni:</b></p>
+                     <ul>
+                        <li><b><code>invalid_client</code>:</b> Il <code>GOOGLE_CLIENT_SECRET</code> non è corretto.</li>
+                        <li><b><code>invalid_grant</code>:</b> Il codice di autorizzazione (<code>code</code>) è scaduto o non valido. Prova a ricollegarti.</li>
+                        <li><b><code>redirect_uri_mismatch</code>:</b> L'URI di reindirizzamento non corrisponde esattamente a quello configurato in Google Cloud Console.</li>
+                     </ul>`;
 
     return renderErrorPage(
-        'Errore di Autenticazione (Diagnosi Avanzata)', 
+        'Errore Scambio Token OAuth', 
         message,
-        err // Pass the entire raw error object to the renderer
+        err
     );
   }
 }
