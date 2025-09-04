@@ -1,7 +1,52 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
+
+/**
+ * A wrapper function for ai.models.generateContent that implements an exponential backoff retry mechanism.
+ * This makes the application more resilient to temporary server errors like 503 (Service Unavailable).
+ * @param ai The GoogleGenAI instance.
+ * @param params The parameters for the generateContent call.
+ * @param maxRetries The maximum number of retry attempts.
+ * @param initialDelay The initial delay in milliseconds for the backoff.
+ * @returns The GenerateContentResponse on success.
+ * @throws The last caught error if all retries fail.
+ */
+async function generateContentWithRetry(
+  ai: GoogleGenAI,
+  params: { model: string; contents: any; config: any },
+  maxRetries = 4,
+  initialDelay = 1000 // 1 second
+): Promise<GenerateContentResponse> {
+  let lastError: any;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = await ai.models.generateContent(params);
+      return result; // Success
+    } catch (e) {
+      lastError = e;
+      const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
+      
+      // Check for transient errors like 503 (overloaded), 429 (rate limited), or other unavailable statuses.
+      if (errorMessage.includes("503") || errorMessage.includes("UNAVAILABLE") || errorMessage.includes("overloaded") || errorMessage.includes("429")) {
+        if (attempt < maxRetries - 1) {
+          const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 1000; // Exponential backoff with jitter
+          console.warn(`Attempt ${attempt + 1} failed with transient error. Retrying in ${Math.round(delay / 1000)}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+           console.error(`Final attempt failed. Error: ${errorMessage}`);
+        }
+      } else {
+        // Not a transient error, re-throw immediately
+        throw e;
+      }
+    }
+  }
+  // If all retries failed, throw the last captured error
+  throw lastError;
+}
+
 
 /**
  * Calcola un punteggio di autorità interna (stile PageRank) per ogni pagina.
@@ -143,7 +188,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   };
   let thematicClusters: ThematicCluster[] = [];
   try {
-    const clusterResponse = await ai.models.generateContent({
+    const clusterResponse = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: clusterPrompt,
         config: { responseMimeType: "application/json", responseSchema: clusterSchema, seed: 42 },
@@ -218,7 +263,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   
   let reportSuggestions: Suggestion[] = [];
   try {
-     const suggestionResponse = await ai.models.generateContent({
+     const suggestionResponse = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: suggestionPrompt,
         config: { responseMimeType: "application/json", responseSchema: suggestionSchema, seed: 42 },
@@ -285,7 +330,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
 
   let contentGapSuggestions: ContentGapSuggestion[] = [];
   try {
-      const contentGapResponse = await ai.models.generateContent({
+      const contentGapResponse = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: contentGapPrompt,
         config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
@@ -455,7 +500,7 @@ export async function deepAnalysisFlow(options: {
   };
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: deepAnalysisPrompt,
         config: { responseMimeType: "application/json", responseSchema: deepAnalysisSchema, seed: 42, },
@@ -569,7 +614,7 @@ export async function progressAnalysisFlow(options: {
   };
 
   try {
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
         contents: progressPrompt,
         config: { responseMimeType: "application/json", responseSchema: progressSchema, seed: 42, },
