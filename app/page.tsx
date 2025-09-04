@@ -2,14 +2,15 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow } from '../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport } from '../types';
 import { SuggestionCard } from '../components/SuggestionCard';
 import { JsonModal } from '../components/JsonModal';
 import { ModificationModal } from '../components/ModificationModal';
 import { ContentGapAnalysis } from '../components/ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from '../components/DeepAnalysisReportDisplay';
 import { GscConnect } from '../components/GscConnect';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon } from '../components/Icons';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from '../components/Icons';
+import { ProgressReportModal } from '../components/ProgressReportModal';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -80,7 +81,32 @@ const AppContent: React.FC = () => {
   // State for GSC data
   const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[]) => {
+  // State for Progress Analysis
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
+  const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
+  const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
+
+  // Load saved report from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedSite = localStorage.getItem('semantic-interlinker-site');
+      if (savedSite) {
+        const item = localStorage.getItem(`semantic-interlinker-report-${savedSite}`);
+        if (item) {
+          const parsedItem: SavedReport = JSON.parse(item);
+          setSavedReport(parsedItem);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load saved report from localStorage", error);
+      // Clean up potentially corrupted data
+      localStorage.removeItem('semantic-interlinker-site');
+    }
+  }, []);
+
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string) => {
     setIsLoading(true);
     setReport(null);
     setError(null);
@@ -96,8 +122,9 @@ const AppContent: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            site_root: siteUrl, 
-            gscData: gscDataPayload
+            site_root: siteUrl,
+            gscData: gscDataPayload,
+            gscSiteUrl: gscSiteUrl
           })
         });
         
@@ -108,6 +135,12 @@ const AppContent: React.FC = () => {
         
         const responseData: Report = await apiResponse.json();
         setReport(responseData);
+        
+        // Save the successful report to localStorage
+        const reportToSave: SavedReport = { report: responseData, timestamp: Date.now() };
+        localStorage.setItem(`semantic-interlinker-report-${siteUrl}`, JSON.stringify(reportToSave));
+        setSavedReport(reportToSave);
+
         if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
             const sortedPages = [...responseData.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
             setSelectedDeepAnalysisUrl(sortedPages[0].url);
@@ -154,6 +187,44 @@ const AppContent: React.FC = () => {
     }
   }, [selectedDeepAnalysisUrl, report?.page_diagnostics, gscData]);
   
+  const handleProgressCheck = useCallback(async () => {
+    if (!savedReport) {
+        setProgressError("Nessun report precedente trovato per il confronto.");
+        return;
+    }
+    setIsProgressLoading(true);
+    setProgressError(null);
+    setProgressReport(null);
+
+    try {
+        const response = await fetch('/api/gsc/progress-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ previousReport: savedReport.report })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
+            throw new Error(errorData.details || `Server responded with status ${response.status}`);
+        }
+
+        const data: ProgressReport = await response.json();
+        setProgressReport(data);
+        setIsProgressModalOpen(true);
+    } catch (err) {
+        setProgressError(err instanceof Error ? err.message : "Si è verificato un errore durante l'analisi dei progressi.");
+    } finally {
+        setIsProgressLoading(false);
+    }
+  }, [savedReport]);
+
+  const handleNewAnalysis = () => {
+    setReport(null);
+    setError(null);
+    setDeepAnalysisReport(null);
+    // Non puliamo savedReport, l'utente potrebbe voler ancora fare un confronto
+  };
+
   const handleViewJson = useCallback((suggestion: Suggestion) => {
     setSelectedSuggestionJson(JSON.stringify(suggestion, null, 2));
     setIsJsonModalOpen(true);
@@ -200,12 +271,22 @@ const AppContent: React.FC = () => {
               )}
             </button>
             <button
-                onClick={() => setReport(null)}
+                onClick={handleNewAnalysis}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
             >
                 <ArrowPathIcon className="w-5 h-5" />
                 Nuova Analisi
             </button>
+            {savedReport && (
+                <button
+                    onClick={handleProgressCheck}
+                    disabled={isProgressLoading}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+                >
+                    {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                    Controlla Progresso
+                </button>
+            )}
            </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -289,7 +370,13 @@ const AppContent: React.FC = () => {
 
         <main>
           {!report && !isLoading && !error && (
-            <GscConnect onAnalysisStart={handleStartAnalysis} />
+            <GscConnect 
+              onAnalysisStart={handleStartAnalysis}
+              savedReport={savedReport}
+              onProgressCheck={handleProgressCheck}
+              isProgressLoading={isProgressLoading}
+              progressError={progressError}
+            />
           )}
 
           {isLoading && (
@@ -305,7 +392,7 @@ const AppContent: React.FC = () => {
               <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
               <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
               <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
-              <button onClick={() => { setError(null); setReport(null); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+              <button onClick={() => { setError(null); setIsLoading(false); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
                   Riprova
               </button>
             </div>
@@ -370,6 +457,11 @@ const AppContent: React.FC = () => {
         isOpen={isModificationModalOpen}
         onClose={() => setIsModificationModalOpen(false)}
         suggestion={currentSuggestion}
+      />
+       <ProgressReportModal
+        isOpen={isProgressModalOpen}
+        onClose={() => setIsProgressModalOpen(false)}
+        report={progressReport}
       />
     </div>
   );

@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     secure: process.env.NODE_ENV !== 'development',
     maxAge: -1, // Expire the cookie immediately
     path: '/',
+    sameSite: 'lax',
   });
 
   const response = NextResponse.json({ success: true, message: 'Logged out successfully.' });

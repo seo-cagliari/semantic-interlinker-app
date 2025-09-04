@@ -102,11 +102,37 @@ export type PageDiagnostic = {
   internal_authority_score: number; // Score from 0 to 10
 };
 
+// --- Tipi per l'Analisi dei Progressi ---
+
+export type ProgressMetric = {
+  page: string;
+  query: string;
+  initial_ctr: number;
+  current_ctr: number;
+  initial_position: number;
+  current_position: number;
+  ctr_change: number; // in percentage points
+  position_change: number; // e.g., -2 means improved by 2 positions
+};
+
+export type ProgressReport = {
+  site: string;
+  previous_report_date: string;
+  current_report_date: string;
+  key_wins: ProgressMetric[];
+  ai_summary: string;
+};
+
+export type SavedReport = {
+  report: Report;
+  timestamp: number;
+};
 
 // --- Tipo principale del Report ---
 
 export type Report = {
   site: string;
+  gscSiteUrl?: string; // The original GSC property URL (e.g., sc-domain:...)
   generated_at: string;
   summary: ReportSummary;
   thematic_clusters: ThematicCluster[];
@@ -114,5 +140,6 @@ export type Report = {
   content_gap_suggestions: ContentGapSuggestion[];
   page_diagnostics: PageDiagnostic[];
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
+  gscData?: GscDataRow[];
   notes?: string;
 };

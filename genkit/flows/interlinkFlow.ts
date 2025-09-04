@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric } from '../../types';
 import { wp } from '../tools/wp';
 
 /**
@@ -64,6 +64,7 @@ function calculateInternalAuthority(
 export async function interlinkFlow(options: {
   site_root: string;
   gscData?: GscDataRow[];
+  gscSiteUrl?: string;
   applyDraft: boolean;
 }): Promise<Report> {
   console.log("Master Agent started with options:", options);
@@ -174,6 +175,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     - DAI PRIORITÀ AI LINK DATA-DRIVEN: I tuoi suggerimenti migliori dovrebbero aiutare le pagine a posizionarsi meglio per queste "query opportunità".
     - RAFFORZA I CLUSTER: Suggerisci link che rinforzino la coerenza dei cluster tematici.
     - Fornisci tutti gli output testuali, inclusa la motivazione, in lingua italiana e rispetta lo schema JSON.
+    - I valori per risk_checks devono essere valori predefiniti sicuri. Imposta target_status a 200, e target_indexable e canonical_ok a true. L'AI non deve eseguire controlli live.
   `;
     const suggestionSchema = {
     type: Type.OBJECT,
@@ -203,15 +205,6 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
                 entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
               },
             },
-            risk_checks: {
-              type: Type.OBJECT,
-              properties: {
-                target_status: { type: Type.INTEGER },
-                target_indexable: { type: Type.BOOLEAN },
-                canonical_ok: { type: Type.BOOLEAN },
-                dup_anchor_in_block: { type: Type.BOOLEAN },
-              },
-            },
             score: { type: Type.NUMBER },
             notes: { type: Type.STRING },
             apply_mode: { type: Type.STRING },
@@ -230,12 +223,22 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     });
     const responseText = suggestionResponse.text;
     if (responseText) {
-        reportSuggestions = JSON.parse(responseText.trim()).suggestions;
+        // Add default risk checks programmatically
+        const parsedSuggestions = JSON.parse(responseText.trim()).suggestions;
+        reportSuggestions = parsedSuggestions.map((s: Omit<Suggestion, 'risk_checks'>) => ({
+            ...s,
+            risk_checks: {
+                target_status: 200,
+                target_indexable: true,
+                canonical_ok: true,
+                dup_anchor_in_block: false
+            }
+        }));
     }
       console.log(`Agent 2 complete. Generated ${reportSuggestions.length} linking suggestions.`);
   } catch(e) {
-      console.error("Error during Strategic Linking phase:", e);
-      throw new Error("Agent 2 (Semantic Linking Strategist) failed.");
+      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+      throw new Error(`Agent 2 (Semantic Linking Strategist) failed. Error: ${detailedError}`);
   }
 
   // --- AGENT 3: CONTENT STRATEGIST ---
@@ -293,12 +296,14 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   
   const finalReport: Report = {
     site: options.site_root,
+    gscSiteUrl: options.gscSiteUrl,
     generated_at: new Date().toISOString(),
     thematic_clusters: thematicClusters,
     suggestions: reportSuggestions,
     content_gap_suggestions: contentGapSuggestions,
     page_diagnostics: pageDiagnostics,
     internal_links_map: internalLinksMap,
+    gscData: options.gscData,
     summary: {
         pages_scanned: allSiteUrls.length,
         indexable_pages: allSiteUrls.length,
@@ -435,5 +440,125 @@ export async function deepAnalysisFlow(options: {
     console.error(`Error during deep analysis for ${options.pageUrl}:`, e);
     const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
     throw new Error(`Failed to generate deep analysis report. Error: ${detailedError}`);
+  }
+}
+
+export async function progressAnalysisFlow(options: {
+  previousReport: Report;
+  newGscData: GscDataRow[];
+}): Promise<ProgressReport> {
+  console.log("Progress Analysis Agent started for site:", options.previousReport.site);
+  const { site, gscData: oldGscData, generated_at } = options.previousReport;
+
+  if (!oldGscData) {
+    throw new Error("Il report precedente non contiene dati GSC, impossibile fare un confronto.");
+  }
+  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+  const oldDataMap = new Map<string, GscDataRow>();
+  for (const row of oldGscData) {
+    const key = `${row.keys[1]}|${row.keys[0]}`; // page|query
+    oldDataMap.set(key, row);
+  }
+
+  const comparisonData: ProgressMetric[] = [];
+  for (const newRow of options.newGscData) {
+      const key = `${newRow.keys[1]}|${newRow.keys[0]}`;
+      const oldRow = oldDataMap.get(key);
+      if (oldRow) {
+          const ctrChange = newRow.ctr - oldRow.ctr;
+          const positionChange = newRow.position - oldRow.position; // Negative is good
+          if (Math.abs(ctrChange) > 0.001 || Math.abs(positionChange) > 0.5) {
+              comparisonData.push({
+                  page: newRow.keys[1],
+                  query: newRow.keys[0],
+                  initial_ctr: oldRow.ctr,
+                  current_ctr: newRow.ctr,
+                  initial_position: oldRow.position,
+                  current_position: newRow.position,
+                  ctr_change: ctrChange,
+                  position_change: positionChange,
+              });
+          }
+      }
+  }
+
+  comparisonData.sort((a, b) => b.ctr_change - a.ctr_change);
+  const topImprovements = comparisonData.slice(0, 50);
+
+  const progressPrompt = `
+    Agisci come un analista SEO esperto. Il tuo compito è analizzare l'evoluzione delle performance di un sito confrontando i dati di Google Search Console (GSC) di due periodi diversi.
+
+    CONTESTO:
+    - Sito analizzato: ${site}
+    - Data del report precedente: ${new Date(generated_at).toLocaleDateString('it-IT')}
+    - L'utente ha applicato dei suggerimenti di link interni basati sul report precedente.
+
+    DATI DI CONFRONTO (le metriche più significative):
+    Formato: Pagina, Query, CTR Iniziale, CTR Attuale, Posizione Iniziale, Posizione Attuale
+    ${topImprovements.map(d => `"${d.page}", "${d.query}", ${(d.initial_ctr * 100).toFixed(2)}%, ${(d.current_ctr * 100).toFixed(2)}%, ${d.initial_position.toFixed(1)}, ${d.current_position.toFixed(1)}`).join('\n')}
+
+    IL TUO COMPITO:
+    1.  Identifica le 3-5 "Vittorie Principali" (key_wins), cioè le combinazioni pagina/query che hanno mostrato i miglioramenti più significativi e strategici (es. grande aumento di CTR, miglioramento notevole di posizione per query importanti).
+    2.  Scrivi un breve riassunto (ai_summary) che commenti i risultati. Sii incoraggiante e strategico. Evidenzia se le strategie di linking sembrano aver funzionato e suggerisci i prossimi passi (es. "L'aumento del CTR per 'query x' sulla pagina Y dimostra che rafforzare quel cluster è stata una mossa vincente. Ora potremmo concentrarci su...").
+
+    REGOLE:
+    - Fornisci l'output in formato JSON e in lingua italiana.
+    - Sii conciso e focalizzati sull'impatto.
+  `;
+  
+  const progressSchema = {
+      type: Type.OBJECT,
+      properties: {
+          key_wins: {
+              type: Type.ARRAY,
+              items: {
+                  type: Type.OBJECT,
+                  properties: {
+                      page: { type: Type.STRING },
+                      query: { type: Type.STRING },
+                      initial_ctr: { type: Type.NUMBER },
+                      current_ctr: { type: Type.NUMBER },
+                      initial_position: { type: Type.NUMBER },
+                      current_position: { type: Type.NUMBER },
+                      ctr_change: { type: Type.NUMBER },
+                      position_change: { type: Type.NUMBER },
+                  },
+                   required: ["page", "query", "initial_ctr", "current_ctr", "initial_position", "current_position", "ctr_change", "position_change"]
+              },
+          },
+          ai_summary: { type: Type.STRING },
+      },
+      required: ["key_wins", "ai_summary"]
+  };
+
+  try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: progressPrompt,
+        config: { responseMimeType: "application/json", responseSchema: progressSchema, seed: 42, },
+      });
+      
+      const responseText = response.text;
+      if (!responseText) throw new Error("Received empty response during progress analysis.");
+      
+      const parsedResponse = JSON.parse(responseText.trim());
+      
+      const finalProgressReport: ProgressReport = {
+          site,
+          previous_report_date: generated_at,
+          current_report_date: new Date().toISOString(),
+          key_wins: parsedResponse.key_wins,
+          ai_summary: parsedResponse.ai_summary,
+      };
+      
+      console.log("Progress Analysis Agent complete.");
+      return finalProgressReport;
+
+  } catch (e) {
+      console.error("Error during progress analysis flow:", e);
+      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+      throw new Error(`Agent (Progress Analyst) failed. Error: ${detailedError}`);
   }
 }

@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'; // A convention for serverless functions
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { site_root, gscData } = body as { site_root: string, gscData?: GscDataRow[] };
+    const { site_root, gscData, gscSiteUrl } = body as { site_root: string, gscData?: GscDataRow[], gscSiteUrl?: string };
 
     if (!site_root) {
       return Response.json({ error: 'site_root is required in the request body.' }, { status: 400 });
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     const report = await interlinkFlow({
       site_root,
       gscData,
+      gscSiteUrl,
       applyDraft: false
     });
 

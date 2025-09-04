@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GscSite, GscDataRow } from '../types';
-import { LoadingSpinnerIcon, GoogleGIcon, LinkIcon, XCircleIcon } from './Icons';
+import { GscSite, GscDataRow, SavedReport } from '../types';
+import { LoadingSpinnerIcon, GoogleGIcon, LinkIcon, XCircleIcon, ClockIcon } from './Icons';
 
 interface GscConnectProps {
-  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[]) => void;
+  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[], gscSiteUrl: string) => void;
+  savedReport: SavedReport | null;
+  onProgressCheck: () => void;
+  isProgressLoading: boolean;
+  progressError?: string | null;
 }
 
-export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
+export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
@@ -23,7 +27,9 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         const siteData: GscSite[] = await response.json();
         setSites(siteData);
         if (siteData.length > 0) {
-          setSelectedGscSite(siteData[0].siteUrl);
+          // Try to pre-select based on saved report, otherwise default to first
+          const defaultSite = savedReport?.report.gscSiteUrl || siteData[0].siteUrl;
+          setSelectedGscSite(defaultSite);
         }
         setIsAuthenticated(true);
       } else {
@@ -35,7 +41,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [savedReport]);
 
   useEffect(() => {
     checkAuthStatus();
@@ -56,6 +62,9 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
       finalSiteUrl = `https://${finalSiteUrl.substring(10)}`;
     }
 
+    // Save the site URL we are analyzing to localStorage to retrieve the report later
+    localStorage.setItem('semantic-interlinker-site', finalSiteUrl);
+
     try {
       const response = await fetch('/api/gsc/query', {
         method: 'POST',
@@ -67,7 +76,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
         throw new Error(errorData.details || errorData.error || 'Impossibile recuperare i dati da GSC.');
       }
       const data: GscDataRow[] = await response.json();
-      onAnalysisStart(finalSiteUrl, data);
+      onAnalysisStart(finalSiteUrl, data, selectedGscSite);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Si è verificato un errore imprevisto.');
       setAnalysisLoading(false);
@@ -97,6 +106,28 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart }) => {
 
   return (
     <div className="text-center py-12 max-w-3xl mx-auto">
+       {savedReport && (
+        <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg animate-fade-in-up">
+            <p className="text-sm text-slate-700">
+                Trovato un report precedente per <strong>{savedReport.report.site}</strong> del {new Date(savedReport.timestamp).toLocaleDateString('it-IT')}.
+                Puoi avviare una nuova analisi o controllare i progressi dall'ultima esecuzione.
+            </p>
+            <button
+                onClick={onProgressCheck}
+                disabled={isProgressLoading}
+                className="mt-3 inline-flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+            >
+                {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                Controlla Progresso
+            </button>
+            {progressError && 
+              <div className="mt-2 flex items-center justify-center gap-2 text-red-600">
+                <XCircleIcon className="w-5 h-5 shrink-0" />
+                <p className="text-sm">{progressError}</p>
+              </div>
+            }
+        </div>
+      )}
       <h2 className="text-xl font-semibold mb-2">Inizia connettendo Google Search Console</h2>
       <p className="text-slate-500 mb-6">Collega il tuo account per alimentare l'analisi con dati di ricerca reali e ottenere suggerimenti strategici.</p>
       

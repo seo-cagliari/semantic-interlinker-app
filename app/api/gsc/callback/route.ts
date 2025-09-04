@@ -112,6 +112,7 @@ export async function GET(req: NextRequest) {
       secure: process.env.NODE_ENV !== 'development',
       maxAge: 60 * 60 * 24 * 30, // 30 giorni
       path: '/',
+      sameSite: 'lax',
     });
     
     // FIX: Construct the Response object with all headers at once to avoid immutable errors.
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
                     <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
                     <p><b>VERIFICA QUESTI VALORI:</b></p>
                     <ul>
-                        <li><b>URI inviato da questa applicazione:</b> code>${redirectUri}</code></li>
+                        <li><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code></li>
                         <li>Assicurati che questo esatto valore sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
                     </ul>`;
     } else if (err.error === 'invalid_client') {
