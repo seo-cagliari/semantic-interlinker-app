@@ -62,6 +62,19 @@ const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters 
   </div>
 );
 
+const loadingMessages = [
+  "Avvio dell'analisi strategica...",
+  "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
+  "Calcolo dell'autorità interna e del potenziale di crescita per ogni pagina...",
+  "Orchestrazione dell'agente AI 'Information Architect'...",
+  "Raggruppamento delle pagine in cluster tematici per l'analisi...",
+  "Deploy dell'agente AI 'Semantic Linking Strategist'...",
+  "Identificazione delle opportunità di linking e diagnosi dei rischi (es. cannibalizzazione)...",
+  "Attivazione dell'agente AI 'Content Strategist'...",
+  "Ricerca di 'content gap' e nuove opportunità editoriali...",
+  "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
+];
+
 const AppContent: React.FC = () => {
   const [report, setReport] = useState<Report | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -89,19 +102,6 @@ const AppContent: React.FC = () => {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
-  const loadingMessages = [
-    "Avvio dell'analisi strategica...",
-    "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
-    "Calcolo dell'autorità interna e del potenziale di crescita per ogni pagina...",
-    "Orchestrazione dell'agente AI 'Information Architect'...",
-    "Raggruppamento delle pagine in cluster tematici per l'analisi...",
-    "Deploy dell'agente AI 'Semantic Linking Strategist'...",
-    "Identificazione delle opportunità di linking e diagnosi dei rischi (es. cannibalizzazione)...",
-    "Attivazione dell'agente AI 'Content Strategist'...",
-    "Ricerca di 'content gap' e nuove opportunità editoriali...",
-    "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
-  ];
-
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
     if (isLoading) {
@@ -123,7 +123,7 @@ const AppContent: React.FC = () => {
         clearInterval(intervalId);
       }
     };
-  }, [isLoading, loadingMessages]);
+  }, [isLoading]);
 
   useEffect(() => {
     try {
