@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport } from '../../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport, OpportunityPage } from '../../types';
 import { SuggestionCard } from '../../components/SuggestionCard';
 import { JsonModal } from '../../components/JsonModal';
 import { ModificationModal } from '../../components/ModificationModal';
@@ -11,6 +11,7 @@ import { DeepAnalysisReportDisplay } from '../../components/DeepAnalysisReportDi
 import { GscConnect } from '../../components/GscConnect';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from '../../components/Icons';
 import { ProgressReportModal } from '../../components/ProgressReportModal';
+import { OpportunityHub } from '../../components/OpportunityHub';
 
 type ViewMode = 'report' | 'visualizer';
 type StrategyOptions = { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
@@ -32,7 +33,7 @@ const SiteVisualizer = dynamic(
 );
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
-  <div className="mb-12">
+  <div className="my-16">
     <div className="flex items-center gap-3 mb-4">
       <FolderIcon className="w-8 h-8 text-slate-500" />
       <h2 className="text-2xl font-bold text-slate-800">Mappa Tematica del Sito</h2>
@@ -91,14 +92,14 @@ const AppContent: React.FC = () => {
   const loadingMessages = [
     "Avvio dell'analisi strategica...",
     "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
-    "Calcolo dell'autorità interna per tutte le pagine del sito (es. 129 pagine)...",
+    "Calcolo dell'autorità interna e del potenziale di crescita per ogni pagina...",
     "Orchestrazione dell'agente AI 'Information Architect'...",
     "Raggruppamento delle pagine in cluster tematici per l'analisi...",
     "Deploy dell'agente AI 'Semantic Linking Strategist'...",
-    "Identificazione delle opportunità di linking basate sui dati...",
+    "Identificazione delle opportunità di linking e diagnosi dei rischi (es. cannibalizzazione)...",
     "Attivazione dell'agente AI 'Content Strategist'...",
     "Ricerca di 'content gap' e nuove opportunità editoriali...",
-    "Quasi finito, sto compilando il report finale...",
+    "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
   ];
 
   useEffect(() => {
@@ -203,6 +204,10 @@ const AppContent: React.FC = () => {
     setDeepAnalysisReport(null);
     setDeepError(null);
 
+    // Scroll to the deep analysis section
+    const deepAnalysisSection = document.getElementById('deep-analysis-section');
+    deepAnalysisSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
     try {
       const apiResponse = await fetch('/api/deep-analyze', {
         method: 'POST',
@@ -259,6 +264,14 @@ const AppContent: React.FC = () => {
         setIsProgressLoading(false);
     }
   }, [savedReport]);
+  
+  const handleAnalyzeFromHub = useCallback((url: string) => {
+      setSelectedDeepAnalysisUrl(url);
+      // Use a timeout to ensure state update before triggering analysis
+      setTimeout(() => {
+          handleDeepAnalysis();
+      }, 0);
+  }, [handleDeepAnalysis]);
 
   const handleNewAnalysis = () => {
     setReport(null);
@@ -365,7 +378,7 @@ const AppContent: React.FC = () => {
   const renderDeepAnalysisSection = () => {
     if (!report) return null;
     return (
-      <div className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200">
+      <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
         <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
         <div className="bg-white p-4 rounded-lg border border-slate-200">
@@ -457,6 +470,10 @@ const AppContent: React.FC = () => {
                 <SiteVisualizer report={report} />
               ) : (
                 <>
+                  {report.opportunity_hub && report.opportunity_hub.length > 0 && (
+                    <OpportunityHub pages={report.opportunity_hub} onAnalyze={handleAnalyzeFromHub} />
+                  )}
+
                   {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
                   
                   {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (

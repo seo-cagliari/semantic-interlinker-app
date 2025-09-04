@@ -10,17 +10,41 @@ interface SuggestionCardProps {
   onToggleSelection: (suggestionId: string) => void;
 }
 
-// FIX: Added 'details' prop to RiskCheckItem to pass in extra information, resolving the 'suggestion' not defined error.
-const RiskCheckItem: React.FC<{ label: string; value: boolean; isWarning?: boolean; details?: string }> = ({ label, value, isWarning = false, details = '' }) => {
+
+const CannibalizationTooltip: React.FC<{ details: NonNullable<Suggestion['risk_checks']['cannibalization_details']> }> = ({ details }) => (
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 md:w-80 p-3 rounded-lg shadow-xl bg-slate-800 text-white text-xs z-20 
+                   opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 pointer-events-none">
+        <div className="font-bold mb-2 border-b border-slate-600 pb-1">Diagnosi Cannibalizzazione</div>
+        
+        <div className="mb-2">
+            <h4 className="font-semibold text-slate-300">Query Contese:</h4>
+            <ul className="list-disc list-inside space-y-0.5">
+                {details.competing_queries.map((q, i) => <li key={i}><span className="text-amber-300">"{q}"</span></li>)}
+            </ul>
+        </div>
+
+        <div>
+            <h4 className="font-semibold text-slate-300">Consigli dell'AI:</h4>
+            <ul className="list-disc list-inside space-y-0.5">
+                 {details.remediation_steps.map((s, i) => <li key={i}>{s}</li>)}
+            </ul>
+        </div>
+         <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-slate-800 rotate-45"></div>
+    </div>
+);
+
+
+const RiskCheckItem: React.FC<{ label: string; value: boolean; isWarning?: boolean; children?: React.ReactNode }> = ({ label, value, isWarning = false, children }) => {
     const Icon = value ? (isWarning ? ExclamationTriangleIcon : CheckCircleIcon) : CheckCircleIcon;
     const colorClass = value ? (isWarning ? 'text-yellow-600' : 'text-green-600') : 'text-green-600';
     const text = value ? (isWarning ? 'Rilevato' : 'Sì') : 'No';
 
     return (
-        <div className="flex items-center gap-1" title={isWarning ? details : ''}>
+        <div className="relative flex items-center gap-1 group">
             <Icon className={`w-4 h-4 ${value ? (isWarning ? 'text-yellow-500' : 'text-green-500') : 'text-green-500'}`} />
             <span>{label}:</span>
             <span className={`font-medium ${colorClass}`}>{text}</span>
+            {children}
         </div>
     );
 };
@@ -103,8 +127,11 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
             label="Cannibalizzazione" 
             value={!!risk_checks.potential_cannibalization} 
             isWarning={true}
-            details={risk_checks.cannibalization_details}
-          />
+          >
+            {risk_checks.potential_cannibalization && risk_checks.cannibalization_details && (
+                <CannibalizationTooltip details={risk_checks.cannibalization_details} />
+            )}
+          </RiskCheckItem>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <button onClick={() => onViewModification(suggestion)} className="w-full md:w-auto flex-grow text-sm flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-700 transition-colors">

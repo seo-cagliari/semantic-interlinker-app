@@ -4,7 +4,10 @@ export type RiskChecks = {
   canonical_ok: boolean;
   dup_anchor_in_block: boolean;
   potential_cannibalization?: boolean;
-  cannibalization_details?: string;
+  cannibalization_details?: {
+    competing_queries: string[];
+    remediation_steps: string[];
+  };
 };
 
 export type InsertionHint = {
@@ -109,6 +112,15 @@ export type PageDiagnostic = {
   internal_authority_score: number; // Score from 0 to 10
 };
 
+// --- Tipi per il Content Performance & Opportunity Hub ---
+export type OpportunityPage = {
+  url: string;
+  title: string;
+  opportunity_score: number;
+  total_impressions: number;
+  average_ctr: number;
+};
+
 // --- Tipi per l'Analisi dei Progressi ---
 
 export type ProgressMetric = {
@@ -146,6 +158,7 @@ export type Report = {
   suggestions: Suggestion[];
   content_gap_suggestions: ContentGapSuggestion[];
   page_diagnostics: PageDiagnostic[];
+  opportunity_hub?: OpportunityPage[];
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   gscData?: GscDataRow[];
   notes?: string;

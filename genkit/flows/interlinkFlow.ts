@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, RiskChecks } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -106,6 +106,58 @@ function calculateInternalAuthority(
     }));
 }
 
+/**
+ * Calcola le pagine con il maggior potenziale di crescita in base ai dati GSC.
+ * @param gscData I dati grezzi da Google Search Console.
+ * @param pageDiagnostics I dati di diagnostica delle pagine, inclusi URL e titolo.
+ * @returns Un elenco di pagine con il loro punteggio di opportunità.
+ */
+function calculateOpportunityHub(
+  gscData: GscDataRow[] | undefined,
+  pageDiagnostics: PageDiagnostic[]
+): OpportunityPage[] {
+    if (!gscData || gscData.length === 0) {
+        return [];
+    }
+
+    const pageStats: Record<string, { totalImpressions: number; weightedCtrSum: number; title: string }> = {};
+    const urlToTitleMap = new Map(pageDiagnostics.map(p => [p.url, p.title]));
+
+    gscData.forEach(row => {
+        const url = row.keys[1];
+        if (!url) return;
+        
+        if (!pageStats[url]) {
+            pageStats[url] = {
+                totalImpressions: 0,
+                weightedCtrSum: 0,
+                title: urlToTitleMap.get(url) || url,
+            };
+        }
+        pageStats[url].totalImpressions += row.impressions;
+        pageStats[url].weightedCtrSum += row.ctr * row.impressions;
+    });
+
+    const opportunities = Object.entries(pageStats)
+        .map(([url, stats]) => {
+            const averageCtr = stats.totalImpressions > 0 ? stats.weightedCtrSum / stats.totalImpressions : 0;
+            // La formula dà più peso alle pagine con molte impressioni e basso CTR.
+            const opportunityScore = stats.totalImpressions * (1 - averageCtr);
+
+            return {
+                url,
+                title: stats.title,
+                opportunity_score: opportunityScore,
+                total_impressions: stats.totalImpressions,
+                average_ctr: averageCtr,
+            };
+        })
+        .filter(p => p.total_impressions > 100); // Filtra per pagine con un minimo di visibilità
+
+    // Ordina per punteggio di opportunità decrescente e prendi i primi 15
+    return opportunities.sort((a, b) => b.opportunity_score - a.opportunity_score).slice(0, 15);
+}
+
 
 export async function interlinkFlow(options: {
   site_root: string;
@@ -130,8 +182,8 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
       : "Non sono stati forniti dati da Google Search Console. Basa la tua analisi solo sulla struttura del sito.";
 
 
-  // PHASE 0: AUTHORITY CALCULATION
-  console.log("Master Agent - Phase 0: Authority Calculation...");
+  // PHASE 0: AUTHORITY & OPPORTUNITY CALCULATION
+  console.log("Master Agent - Phase 0: Authority & Opportunity Calculation...");
   const allPagesWithContent = await wp.getAllPublishedPages(options.site_root);
   const internalLinksMap = await wp.getAllInternalLinksFromAllPages(options.site_root, allPagesWithContent);
   const pagesWithScores = calculateInternalAuthority(
@@ -144,7 +196,10 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
       title: p.title,
       internal_authority_score: p.score
   }));
-  console.log(`Master Agent - Phase 0 complete. Calculated authority for ${pageDiagnostics.length} pages.`);
+  
+  const opportunityHubData = calculateOpportunityHub(options.gscData, pageDiagnostics);
+
+  console.log(`Master Agent - Phase 0 complete. Calculated authority for ${pageDiagnostics.length} pages and found ${opportunityHubData.length} opportunities.`);
 
   const allSiteUrls = pageDiagnostics.map(p => p.url);
   if (allSiteUrls.length === 0) {
@@ -254,8 +309,12 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   suggestionPrompt += `
     ISTRUZIONI AVANZATE (DA APPLICARE A TUTTI I SUGGERIMENTI):
     1. ANALISI DELL'INTENTO: Per ogni suggerimento, valuta la compatibilità dell'intento di ricerca tra la pagina di origine e quella di destinazione (es. "Ottimo, da informativo a transazionale per guidare l'utente."). Aggiungi un commento su questo nel campo 'intent_alignment_comment'.
-    2. CONTROLLO CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali. Se rilevi un rischio significativo, imposta 'potential_cannibalization' a true e spiega brevemente il motivo in 'cannibalization_details'. Altrimenti, imposta a false.
-    3. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' come descritto.
+    2. DIAGNOSI CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali.
+       - Se rilevi un rischio, imposta 'potential_cannibalization' a true. Poi, popola 'cannibalization_details' con:
+         - 'competing_queries': un array con le 1-3 query principali per cui competono.
+         - 'remediation_steps': un array con 1-2 consigli pratici per risolvere il problema (es. "Differenziare l'intento delle pagine", "Consolidare l'autorità sulla pagina target").
+       - Se non c'è rischio, imposta 'potential_cannibalization' a false e lascia 'cannibalization_details' vuoto o nullo.
+    3. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
   `;
 
     const suggestionSchema = {
@@ -291,7 +350,14 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
               type: Type.OBJECT,
               properties: {
                 potential_cannibalization: { type: Type.BOOLEAN, description: "Indica se c'è un rischio di cannibalizzazione." },
-                cannibalization_details: { type: Type.STRING, description: "Spiegazione del rischio di cannibalizzazione." }
+                cannibalization_details: { 
+                  type: Type.OBJECT,
+                  properties: {
+                    competing_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    remediation_steps: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  description: "Dettagli sulla cannibalizzazione." 
+                }
               }
             },
             score: { type: Type.NUMBER },
@@ -322,7 +388,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
                 canonical_ok: true,
                 dup_anchor_in_block: false,
                 potential_cannibalization: s.risk_checks?.potential_cannibalization ?? false,
-                cannibalization_details: s.risk_checks?.cannibalization_details ?? ''
+                cannibalization_details: s.risk_checks?.potential_cannibalization ? s.risk_checks.cannibalization_details : undefined
             }
         }) as Suggestion);
     }
@@ -426,6 +492,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     suggestions: reportSuggestions,
     content_gap_suggestions: contentGapSuggestions,
     page_diagnostics: pageDiagnostics,
+    opportunity_hub: opportunityHubData,
     internal_links_map: internalLinksMap,
     gscData: options.gscData,
     summary: {
