@@ -26,8 +26,10 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize ref with null and provide explicit generic types for nodes and links.
-    const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject>>(null);
+    // FIX DEFINITIVO: Il ref viene tipizzato con il tipo generico ForceGraphMethods
+    // senza specificare <MyNode, LinkObject>. Questo risolve il problema di
+    // invarianza del tipo che causava l'errore di compilazione.
+    const fgRef = useRef<ForceGraphMethods>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
