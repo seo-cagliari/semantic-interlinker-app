@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Suggestion, Report, DeepAnalysisReport, PageDiagnostic, SavedReport } from '../types';
 import { SuggestionCard } from './SuggestionCard';
@@ -21,6 +21,7 @@ type ViewMode = 'report' | 'visualizer';
 
 interface ReportDisplayProps {
   report: Report;
+  sortedPages: PageDiagnostic[]; // ARCHITECTURAL FIX: Receive the pre-sorted array
   savedReport: SavedReport | null;
   isProgressLoading: boolean;
   onProgressCheck: () => void;
@@ -40,6 +41,7 @@ interface ReportDisplayProps {
 
 const ReportDisplay: React.FC<ReportDisplayProps> = ({
   report,
+  sortedPages, // Use the new prop
   savedReport,
   isProgressLoading,
   onProgressCheck,
@@ -58,11 +60,6 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
-  const pageDiagnostics = report?.page_diagnostics || [];
-  // Rimosso useMemo per risolvere un problema di compilazione di Next.js (SWC).
-  // L'array viene ora ordinato direttamente. Il costo di performance è trascurabile in questo contesto.
-  const sortedPageDiagnostics = [...pageDiagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-
   return (
     <div className="animate-fade-in-up">
       <div className="mb-10">
@@ -170,7 +167,7 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({
                     onChange={(e) => onSetSelectedDeepAnalysisUrl(e.target.value)}
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                   >
-                    {sortedPageDiagnostics.map(page => (
+                    {sortedPages.map(page => (
                       <option key={page.url} value={page.url}>
                         [{page.internal_authority_score.toFixed(1)}] - {page.title}
                       </option>

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport } from '../types';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, PageDiagnostic } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { GscConnect } from './GscConnect';
@@ -53,16 +53,22 @@ const DashboardClient: React.FC = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // ARCHITECTURAL FIX: Perform data sorting here, in the parent component.
+  const sortedPageDiagnostics = useMemo(() => {
+    if (!report?.page_diagnostics) return [];
+    return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+  }, [report?.page_diagnostics]);
+
 
   useEffect(() => {
      if (savedReport) {
         setReport(savedReport.report);
-         if (savedReport.report.page_diagnostics && savedReport.report.page_diagnostics.length > 0) {
-            const sortedPages = [...savedReport.report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-            setSelectedDeepAnalysisUrl(sortedPages[0].url);
+         if (sortedPageDiagnostics.length > 0) {
+            setSelectedDeepAnalysisUrl(sortedPageDiagnostics[0].url);
           }
      }
-  }, [savedReport]);
+  }, [savedReport, sortedPageDiagnostics]);
   
   useEffect(() => {
     const cleanup = () => {
@@ -144,10 +150,6 @@ const DashboardClient: React.FC = () => {
         setSavedReport(reportToSave);
         setReport(responseData);
 
-        if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
-            const sortedPages = [...responseData.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-            setSelectedDeepAnalysisUrl(sortedPages[0].url);
-        }
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
             console.log('Analysis request was aborted.');
@@ -312,6 +314,7 @@ const DashboardClient: React.FC = () => {
           {report && (
             <ReportDisplay
               report={report}
+              sortedPages={sortedPageDiagnostics} // Pass the pre-sorted array as a prop
               savedReport={savedReport}
               isProgressLoading={isProgressLoading}
               onProgressCheck={handleProgressCheck}
