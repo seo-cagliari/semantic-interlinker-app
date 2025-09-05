@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport } from '../types';
 import { SuggestionCard } from './SuggestionCard';
@@ -109,6 +109,12 @@ const DashboardClient: React.FC = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const sortedPageDiagnostics = useMemo(() => {
+    if (!report?.page_diagnostics) return [];
+    // Create a new sorted array instead of sorting in-place
+    return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+  }, [report?.page_diagnostics]);
 
   useEffect(() => {
      if (savedReport) {
@@ -405,7 +411,7 @@ const DashboardClient: React.FC = () => {
               onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
             >
-              {[...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score).map(page => (
+              {sortedPageDiagnostics.map(page => (
                 <option key={page.url} value={page.url}>
                   [{page.internal_authority_score.toFixed(1)}] - {page.title}
                 </option>
