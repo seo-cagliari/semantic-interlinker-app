@@ -397,47 +397,6 @@ const DashboardClient: React.FC = () => {
       </div>
     );
   };
-  
-  const deepAnalysisSection = report ? (
-    <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
-      <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
-      <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
-      <div className="bg-white p-4 rounded-lg border border-slate-200">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div className="md:col-span-2">
-            <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
-            <select
-              value={selectedDeepAnalysisUrl}
-              onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-            >
-              {sortedPageDiagnostics.map(page => (
-                <option key={page.url} value={page.url}>
-                  [{page.internal_authority_score.toFixed(1)}] - {page.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <button
-              onClick={handleDeepAnalysis}
-              disabled={isDeepLoading}
-              className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
-            >
-              {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
-              Analisi Dettagliata
-            </button>
-          </div>
-        </div>
-        {deepError &&
-          <div className="mt-4 flex items-center gap-2 text-red-600">
-            <XCircleIcon className="w-5 h-5" />
-            <p className="text-sm">{deepError}</p>
-          </div>
-        }
-      </div>
-    </div>
-  ) : null;
 
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
@@ -520,7 +479,44 @@ const DashboardClient: React.FC = () => {
                     ))}
                   </div>
 
-                  {deepAnalysisSection}
+                  <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
+                    <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
+                    <div className="bg-white p-4 rounded-lg border border-slate-200">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="md:col-span-2">
+                          <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
+                          <select
+                            value={selectedDeepAnalysisUrl}
+                            onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                          >
+                            {sortedPageDiagnostics.map(page => (
+                              <option key={page.url} value={page.url}>
+                                [{page.internal_authority_score.toFixed(1)}] - {page.title}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <button
+                            onClick={handleDeepAnalysis}
+                            disabled={isDeepLoading}
+                            className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
+                          >
+                            {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                            Analisi Dettagliata
+                          </button>
+                        </div>
+                      </div>
+                      {deepError &&
+                        <div className="mt-4 flex items-center gap-2 text-red-600">
+                          <XCircleIcon className="w-5 h-5" />
+                          <p className="text-sm">{deepError}</p>
+                        </div>
+                      }
+                    </div>
+                  </div>
 
                   {isDeepLoading && !deepAnalysisReport && (
                     <div className="text-center py-12 flex flex-col items-center">
