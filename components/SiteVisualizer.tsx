@@ -26,7 +26,8 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    const fgRef = useRef<ForceGraphMethods | null>(null);
+    // FIX: Initialize useRef with null.
+    const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject>>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
