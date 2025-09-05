@@ -394,6 +394,9 @@ const DashboardClient: React.FC = () => {
   
   const renderDeepAnalysisSection = () => {
     if (!report) return null;
+
+    const sortedPages = [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+
     return (
       <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
@@ -407,11 +410,11 @@ const DashboardClient: React.FC = () => {
                       onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
                       className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                   >
-                      {report.page_diagnostics.sort((a,b) => b.internal_authority_score - a.internal_authority_score).map(page => 
+                      {sortedPages.map(page => (
                           <option key={page.url} value={page.url}>
                           [{page.internal_authority_score.toFixed(1)}] - {page.title}
                           </option>
-                      )}
+                      ))}
                   </select>
               </div>
               <div>
@@ -433,7 +436,7 @@ const DashboardClient: React.FC = () => {
             }
         </div>
       </div>
-    )
+    );
   }
 
   return (
