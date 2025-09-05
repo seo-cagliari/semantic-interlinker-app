@@ -82,7 +82,6 @@ const AppContent: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   const [loadingMessage, setLoadingMessage] = useState<string>('');
-  // FIX: Use ReturnType<typeof setInterval> for a portable interval ID type.
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
