@@ -3,9 +3,8 @@ import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-f
 import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
-// Definiamo un tipo semplice per i dati dei nostri nodi.
-// La libreria aggiungerà dinamicamente altre proprietà come x, y, ecc.
-interface MyNode {
+// Definiamo un tipo che estende NodeObject per includere le nostre proprietà custom.
+interface MyNode extends NodeObject {
     id: string;
     name: string;
     val: number;
@@ -27,13 +26,11 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // Inizializziamo un ref standard per superare i problemi di tipo della libreria.
-    const fgRef = useRef(null);
+    const fgRef = useRef<ForceGraphMethods | null>(null);
 
-    // FIX: Use specific generic types for state to match graph data
-    const [highlightedNode, setHighlightedNode] = useState<NodeObject<MyNode> | null>(null);
-    const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject<MyNode>>>(new Set());
-    const [highlightNodes, setHighlightNodes] = useState<Set<NodeObject<MyNode>>>(new Set());
+    const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
+    const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
+    const [highlightNodes, setHighlightNodes] = useState<Set<MyNode>>(new Set());
 
     const graphData = useMemo(() => {
         const nodes: MyNode[] = report.page_diagnostics.map(page => ({
@@ -43,11 +40,12 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             score: page.internal_authority_score,
         }));
 
-        // FIX: Use LinkObject<MyNode> for links array, removing the incorrect MyLink interface.
-        const links: LinkObject<MyNode>[] = [];
+        const links: LinkObject[] = [];
+        const nodeIds = new Set(nodes.map(n => n.id));
+
         for (const source in report.internal_links_map) {
             for (const target of report.internal_links_map[source]) {
-                if(nodes.some(n => n.id === source) && nodes.some(n => n.id === target)) {
+                if(nodeIds.has(source) && nodeIds.has(target)) {
                     links.push({ source, target });
                 }
             }
@@ -66,35 +64,32 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         return map;
     }, [report.thematic_clusters]);
 
-    // FIX: Use specific NodeObject<MyNode> type for node parameter
-    const handleNodeClick = useCallback((node: NodeObject<MyNode>) => {
+    const handleNodeClick = useCallback((node: NodeObject) => {
+        const myNode = node as MyNode;
         const { links, nodes } = graphData;
-        const newHighlightLinks = new Set<LinkObject<MyNode>>();
-        const newHighlightNodes = new Set<NodeObject<MyNode>>([node]);
+        const newHighlightLinks = new Set<LinkObject>();
+        const newHighlightNodes = new Set<MyNode>([myNode]);
     
         links.forEach(link => {
-            // FIX: Use NodeObject<MyNode> for casting link source/target
-            const sourceId = typeof link.source === 'object' && link.source !== null && 'id' in link.source ? (link.source as NodeObject<MyNode>).id : link.source;
-            const targetId = typeof link.target === 'object' && link.target !== null && 'id' in link.target ? (link.target as NodeObject<MyNode>).id : link.target;
+            const sourceId = typeof link.source === 'object' && link.source !== null ? (link.source as MyNode).id : link.source;
+            const targetId = typeof link.target === 'object' && link.target !== null ? (link.target as MyNode).id : link.target;
 
-            if (sourceId === node.id || targetId === node.id) {
+            if (sourceId === myNode.id || targetId === myNode.id) {
                 newHighlightLinks.add(link);
                 const sourceNode = nodes.find(n => n.id === sourceId);
                 const targetNode = nodes.find(n => n.id === targetId);
-                // FIX: Cast nodes to NodeObject<MyNode> when adding to set
-                if (sourceNode) newHighlightNodes.add(sourceNode as NodeObject<MyNode>);
-                if (targetNode) newHighlightNodes.add(targetNode as NodeObject<MyNode>);
+                if (sourceNode) newHighlightNodes.add(sourceNode);
+                if (targetNode) newHighlightNodes.add(targetNode);
             }
         });
     
-        setHighlightedNode(node);
+        setHighlightedNode(myNode);
         setHighlightLinks(newHighlightLinks);
         setHighlightNodes(newHighlightNodes);
 
-        const fg = fgRef.current as ForceGraphMethods | null;
-        if(fg && node.x !== undefined && node.y !== undefined){
-            fg.centerAt(node.x, node.y, 1000);
-            fg.zoom(2.5, 1000);
+        if(fgRef.current && myNode.x !== undefined && myNode.y !== undefined){
+            fgRef.current.centerAt(myNode.x, myNode.y, 1000);
+            fgRef.current.zoom(2.5, 1000);
         }
 
     }, [graphData]);
@@ -103,22 +98,21 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
         setHighlightedNode(null);
         setHighlightLinks(new Set());
         setHighlightNodes(new Set());
-        const fg = fgRef.current as ForceGraphMethods | null;
-        if(fg){
-            fg.zoomToFit(1000, 100);
+        if(fgRef.current){
+            fgRef.current.zoomToFit(1000, 100);
         }
     }, []);
 
-    const getNodeColor = (node: NodeObject<MyNode>) => clusterColorMap.get(node.id as string) || '#9ca3af';
-    const getLinkColor = (link: LinkObject<MyNode>) => highlightLinks.has(link) ? '#4f46e5' : '#d1d5db';
+    const getNodeColor = (node: MyNode) => clusterColorMap.get(node.id) || '#9ca3af';
+    const getLinkColor = (link: LinkObject) => highlightLinks.has(link) ? '#4f46e5' : '#d1d5db';
 
     useEffect(() => {
-        setTimeout(() => {
-            const fg = fgRef.current as ForceGraphMethods | null;
-            if(fg){
-                fg.zoomToFit(1000, 100);
+        const timer = setTimeout(() => {
+            if(fgRef.current){
+                fgRef.current.zoomToFit(1000, 100);
             }
         }, 500);
+        return () => clearTimeout(timer);
     }, []);
 
     return (
@@ -139,11 +133,11 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
             </div>
             
             <ForceGraph2D
-                ref={fgRef as any} // FIX: Casting as 'any' to bypass strict library type-checking.
+                ref={fgRef}
                 graphData={graphData}
                 nodeRelSize={4}
                 nodeCanvasObject={(node, ctx, globalScale) => {
-                    const myNode = node as NodeObject<MyNode>; // Cast to access custom props and library props
+                    const myNode = node as MyNode;
                     const label = myNode.name || '';
                     const fontSize = 12 / globalScale;
                     const isHighlighted = highlightedNode === null || highlightNodes.has(myNode);
@@ -170,12 +164,12 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                         ctx.fillText(shortLabel, myNode.x, myNode.y + myNode.val + 4);
                     }
                 }}
-                linkWidth={link => highlightLinks.has(link as LinkObject<MyNode>) ? 2 : 0.5}
-                linkColor={getLinkColor as (link: object) => string}
-                linkDirectionalParticles={link => highlightLinks.has(link as LinkObject<MyNode>) ? 2 : 0}
+                linkWidth={link => highlightLinks.has(link) ? 2 : 0.5}
+                linkColor={getLinkColor}
+                linkDirectionalParticles={link => highlightLinks.has(link) ? 2 : 0}
                 linkDirectionalParticleWidth={2}
-                linkDirectionalParticleSpeed={_ => 0.006}
-                onNodeClick={handleNodeClick}
+                linkDirectionalParticleSpeed={0.006}
+                onNodeClick={(node) => handleNodeClick(node as MyNode)}
                 onBackgroundClick={handleBackgroundClick}
             />
 
@@ -184,7 +178,7 @@ export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
                    <h3 className="font-bold text-lg text-slate-900 truncate" title={highlightedNode.name}>{ highlightedNode.name }</h3>
                    <div className="flex items-center gap-4 text-sm mt-1">
                       <span className="font-semibold" style={{ color: getNodeColor(highlightedNode) }}>
-                         Autorità: {(highlightedNode.score || 0).toFixed(2)}/10
+                         Autorità: {highlightedNode.score.toFixed(2)}/10
                       </span>
                       <a href={highlightedNode.id as string} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                           Apri Pagina

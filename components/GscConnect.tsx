@@ -19,12 +19,7 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedRe
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
-  const [seozoomApiKey, setSeozoomApiKey] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
-    }
-    return '';
-  });
+  const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAnalysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +27,13 @@ export const GscConnect: React.FC<GscConnectProps> = ({ onAnalysisStart, savedRe
   const [strategy, setStrategy] = useState<Strategy>('global');
   const [strategyTargetUrl, setStrategyTargetUrl] = useState('');
 
+  // Effect to load the API key from localStorage on the client side
+  useEffect(() => {
+    const savedKey = localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
+    setSeozoomApiKey(savedKey);
+  }, []);
+  
+  // Effect to save the API key to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
