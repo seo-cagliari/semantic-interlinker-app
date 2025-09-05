@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport, OpportunityPage } from '../types';
+import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport } from '../types';
 import { SuggestionCard } from './SuggestionCard';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
@@ -12,6 +12,7 @@ import { GscConnect } from './GscConnect';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
 import { OpportunityHub } from './OpportunityHub';
+import useLocalStorage from '../hooks/useLocalStorage';
 
 const SiteVisualizerSkeleton = () => (
     <div className="border border-slate-200 rounded-2xl bg-white shadow-lg relative h-[70vh] flex items-center justify-center animate-fade-in-up">
@@ -30,7 +31,6 @@ const SiteVisualizer = dynamic(
     loading: () => <SiteVisualizerSkeleton />
   }
 );
-
 
 type ViewMode = 'report' | 'visualizer';
 type StrategyOptions = { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
@@ -79,7 +79,10 @@ const loadingMessages = [
 ];
 
 const DashboardClient: React.FC = () => {
-  const [report, setReport] = useState<Report | null>(null);
+  const [site, setSite] = useLocalStorage<string | null>('semantic-interlinker-site', null);
+  const [savedReport, setSavedReport] = useLocalStorage<SavedReport | null>(site ? `semantic-interlinker-report-${site}`: '', null);
+
+  const [report, setReport] = useState<Report | null>(savedReport?.report || null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('report');
@@ -100,11 +103,20 @@ const DashboardClient: React.FC = () => {
   
   const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
 
-  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
   const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+     if (savedReport) {
+        setReport(savedReport.report);
+         if (savedReport.report.page_diagnostics && savedReport.report.page_diagnostics.length > 0) {
+            const sortedPages = [...savedReport.report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+            setSelectedDeepAnalysisUrl(sortedPages[0].url);
+          }
+     }
+  }, [savedReport]);
   
   useEffect(() => {
     const cleanup = () => {
@@ -132,27 +144,6 @@ const DashboardClient: React.FC = () => {
     
     return cleanup;
   }, [isLoading]);
-
-  useEffect(() => {
-    try {
-      const savedSite = localStorage.getItem('semantic-interlinker-site');
-      if (savedSite) {
-        const item = localStorage.getItem(`semantic-interlinker-report-${savedSite}`);
-        if (item) {
-          const parsedItem: SavedReport = JSON.parse(item);
-          setSavedReport(parsedItem);
-          setReport(parsedItem.report);
-           if (parsedItem.report.page_diagnostics && parsedItem.report.page_diagnostics.length > 0) {
-            const sortedPages = [...parsedItem.report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-            setSelectedDeepAnalysisUrl(sortedPages[0].url);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load saved report from localStorage", error);
-      localStorage.removeItem('semantic-interlinker-site');
-    }
-  }, []);
 
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => {
     setIsLoading(true);
@@ -184,12 +175,11 @@ const DashboardClient: React.FC = () => {
         }
         
         const responseData: Report = await apiResponse.json();
-        setReport(responseData);
-        
         const reportToSave: SavedReport = { report: responseData, timestamp: Date.now() };
-        localStorage.setItem(`semantic-interlinker-report-${siteUrl}`, JSON.stringify(reportToSave));
-        localStorage.setItem('semantic-interlinker-site', siteUrl);
-        setSavedReport(reportToSave);
+        
+        setSite(siteUrl);
+        setSavedReport(reportToSave); // Questo salverà su localStorage
+        setReport(responseData);
 
         if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
             const sortedPages = [...responseData.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
@@ -200,7 +190,7 @@ const DashboardClient: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-  }, []);
+  }, [setSite, setSavedReport]);
 
   const handleDeepAnalysis = useCallback(async () => {
     if (!selectedDeepAnalysisUrl || !report?.page_diagnostics) {
@@ -283,15 +273,7 @@ const DashboardClient: React.FC = () => {
     setError(null);
     setDeepAnalysisReport(null);
     setSavedReport(null);
-    try {
-      const savedSite = localStorage.getItem('semantic-interlinker-site');
-       if (savedSite) {
-         localStorage.removeItem(`semantic-interlinker-report-${savedSite}`);
-         localStorage.removeItem('semantic-interlinker-site');
-       }
-    } catch(e) {
-      console.error("Failed to clear localStorage", e);
-    }
+    setSite(null);
   };
 
   const handleViewJson = useCallback((suggestion: Suggestion) => {
