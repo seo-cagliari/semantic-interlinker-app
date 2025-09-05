@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const missingVars = [];
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       include_granted_scopes: true,
     });
     
-    // Redirect directly to Google's authentication page
+    // Redirect directly to Google's authentication page using NextResponse for robustness
     return NextResponse.redirect(authorizationUrl);
   
   } catch(error) {

@@ -1,22 +1,17 @@
-import { serialize } from 'cookie';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  // Create a cookie that is expired
-  const cookie = serialize('gsc_token', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV !== 'development',
-    maxAge: -1, // Expire the cookie immediately
-    path: '/',
-    sameSite: 'lax',
-  });
-
-  const response = NextResponse.json({ success: true, message: 'Logged out successfully.' });
-  
-  // Set the expired cookie in the response headers to clear it from the browser
-  response.headers.set('Set-Cookie', cookie);
-  
-  return response;
+  try {
+    const response = NextResponse.json({ success: true, message: 'Logged out successfully.' });
+    
+    // Use the robust Next.js API to delete the cookie
+    response.cookies.delete('gsc_token');
+    
+    return response;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred during logout.";
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
+  }
 }

@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const renderErrorPage = (title: string, message: string, rawError?: any) => {
   const rawErrorHtml = rawError && Object.keys(rawError).length > 0
