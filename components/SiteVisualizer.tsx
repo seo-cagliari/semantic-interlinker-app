@@ -26,8 +26,10 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
-    // FIX: Initialize useRef with null to satisfy the requirement of passing an argument.
-    const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject> | null>(null);
+    // FIX: Explicitly initialize useRef with `undefined` and provide the correct type.
+    // This resolves the "Expected 1 arguments, but got 0" error and ensures type compatibility
+    // with the `ref` prop of the ForceGraph2D component.
+    const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject> | undefined>(undefined);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
     const [highlightLinks, setHighlightLinks] = useState<Set<LinkObject>>(new Set());
