@@ -3,10 +3,6 @@ import ForceGraph2D, { ForceGraphMethods, NodeObject, LinkObject } from 'react-f
 import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
-// Definiamo un tipo che estende NodeObject per includere le nostre proprietà custom.
-// FIX: Explicitly add optional x and y properties to the MyNode interface.
-// These properties are added by the force-graph engine at runtime, and this
-// change informs TypeScript of their existence, resolving compiler errors.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
@@ -31,9 +27,6 @@ interface SiteVisualizerProps {
 }
 
 export const SiteVisualizer = ({ report }: SiteVisualizerProps) => {
-    // FIX DEFINITIVO (Strategia Pragmatica):
-    // Manteniamo la definizione del ref il più specifica possibile per avere il type-checking
-    // corretto quando usiamo `fgRef.current`.
     const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject>>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);
@@ -141,9 +134,6 @@ export const SiteVisualizer = ({ report }: SiteVisualizerProps) => {
             </div>
             
             <ForceGraph2D
-                // Usiamo `as any` per bypassare il complesso controllo di tipo del ref,
-                // che è la causa principale degli errori di compilazione persistenti.
-                // Questo sblocca la compilazione mantenendo la sicurezza dei tipi nel resto del codice.
                 ref={fgRef as any}
                 graphData={graphData}
                 nodeRelSize={4}

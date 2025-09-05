@@ -8,7 +8,7 @@ import { GscConnect } from './GscConnect';
 import { BrainCircuitIcon, LoadingSpinnerIcon, XCircleIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
 import useLocalStorage from '../hooks/useLocalStorage';
-import ReportDisplay from './ReportDisplay'; // Import the new component
+import ReportDisplay from './ReportDisplay';
 
 const loadingMessages = [
   "Avvio dell'analisi strategica...",
@@ -54,7 +54,6 @@ const DashboardClient = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // ARCHITECTURAL FIX: Perform data sorting here, in the parent component.
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
     return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
@@ -314,7 +313,7 @@ const DashboardClient = () => {
           {report && (
             <ReportDisplay
               report={report}
-              sortedPages={sortedPageDiagnostics} // Pass the pre-sorted array as a prop
+              sortedPages={sortedPageDiagnostics}
               savedReport={savedReport}
               isProgressLoading={isProgressLoading}
               onProgressCheck={handleProgressCheck}

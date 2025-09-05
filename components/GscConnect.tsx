@@ -27,13 +27,11 @@ export const GscConnect = ({ onAnalysisStart, savedReport, onProgressCheck, isPr
   const [strategy, setStrategy] = useState<Strategy>('global');
   const [strategyTargetUrl, setStrategyTargetUrl] = useState('');
 
-  // Effect to load the API key from localStorage on the client side
   useEffect(() => {
     const savedKey = localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
     setSeozoomApiKey(savedKey);
   }, []);
   
-  // Effect to save the API key to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
@@ -49,7 +47,6 @@ export const GscConnect = ({ onAnalysisStart, savedReport, onProgressCheck, isPr
         const siteData: GscSite[] = await response.json();
         setSites(siteData);
         if (siteData.length > 0) {
-          // Try to pre-select based on saved report, otherwise default to first
           const defaultSite = savedReport?.report.gscSiteUrl || siteData[0].siteUrl;
           setSelectedGscSite(defaultSite);
         }

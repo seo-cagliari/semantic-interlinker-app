@@ -154,8 +154,6 @@ function calculateOpportunityHub(
         })
         .filter(p => p.total_impressions > 100); // Filtra per pagine con un minimo di visibilità
 
-    // Ordina per punteggio di opportunità decrescente e prendi i primi 15
-    // FIX: Corrected a typo in the sort function from `a.score` to `a.opportunity_score`.
     return opportunities.sort((a, b) => b.opportunity_score - a.opportunity_score).slice(0, 15);
 }
 
@@ -568,8 +566,6 @@ export async function deepAnalysisFlow(options: {
     - Il piano d'azione deve essere il punto focale della tua analisi.
   `;
 
-  // FIX: Ensured all 'required' field arrays in the schema contain properly quoted strings
-  // to resolve "Cannot find name" errors during TypeScript compilation.
   const deepAnalysisSchema = {
     type: Type.OBJECT,
     properties: {

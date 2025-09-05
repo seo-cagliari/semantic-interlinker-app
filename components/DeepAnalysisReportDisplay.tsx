@@ -57,7 +57,6 @@ export const DeepAnalysisReportDisplay = ({ report }: DeepAnalysisReportDisplayP
         </div>
       </div>
 
-      {/* --- Strategic Action Plan --- */}
       {action_plan && (
          <div className="mb-10 p-5 rounded-xl border border-blue-200 bg-blue-50/50">
            <div className="flex items-start gap-3 mb-3">

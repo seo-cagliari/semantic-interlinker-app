@@ -91,7 +91,7 @@ const ReportView = ({
             </div>
             <div>
               <button
-                onClick={onDeepAnalysis}
+                onClick={() => onDeepAnalysis()}
                 disabled={isDeepLoading}
                 className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
               >

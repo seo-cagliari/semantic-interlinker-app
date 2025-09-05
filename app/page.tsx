@@ -17,8 +17,6 @@ const LandingPage = () => {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // In una vera app, i dati verrebbero inviati a un endpoint API.
-    // Per ora, simuliamo l'invio.
     console.log('Registration Request:', formState);
     setTimeout(() => {
       setIsSubmitting(false);

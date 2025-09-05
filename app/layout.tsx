@@ -1,5 +1,4 @@
 import React from 'react';
-// FIX: Changed from 'import type' to 'import' to resolve module resolution error.
 import { Metadata } from 'next';
 import { Inter, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
@@ -22,11 +21,11 @@ export const metadata: Metadata = {
   description: 'Suggerimenti di Link Interni basati su AI per WordPress',
 };
 
-export default function RootLayout({
-  children,
-}: {
+interface RootLayoutProps {
   children: React.ReactNode;
-}) {
+}
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="it" className={`${inter.variable} ${sourceCodePro.variable}`}>
       <body>{children}</body>

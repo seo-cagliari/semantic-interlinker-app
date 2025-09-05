@@ -16,7 +16,7 @@ export const ModificationModal = ({ isOpen, onClose, suggestion }: ModificationM
       const linkHtml = `<a href="${suggestion.target_url}">${suggestion.proposed_anchor}</a>`;
       navigator.clipboard.writeText(linkHtml).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+        setTimeout(() => setCopied(false), 2000);
       });
     }
   }, [suggestion]);
