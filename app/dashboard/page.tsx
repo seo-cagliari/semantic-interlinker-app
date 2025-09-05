@@ -133,7 +133,8 @@ const AppContent: React.FC = () => {
   }, [isLoading]);
 
   useEffect(() => {
-    // This effect runs only on the client side, after hydration
+    // This effect runs only on the client, after the initial render.
+    // It's safe to access localStorage here.
     try {
       const savedSite = localStorage.getItem('semantic-interlinker-site');
       if (savedSite) {
@@ -150,11 +151,12 @@ const AppContent: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to load saved report from localStorage", error);
+      // Clear potentially corrupted data
       localStorage.removeItem('semantic-interlinker-site');
-    } finally {
-      // Signal that client-side initialization is complete
-      setIsClient(true);
     }
+    // This MUST be the last thing in the effect. It signals that client-side logic has run
+    // and the component can now safely render its actual content.
+    setIsClient(true);
   }, []);
 
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => {
@@ -214,7 +216,6 @@ const AppContent: React.FC = () => {
     setDeepAnalysisReport(null);
     setDeepError(null);
 
-    // Scroll to the deep analysis section
     const deepAnalysisSection = document.getElementById('deep-analysis-section');
     deepAnalysisSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -277,7 +278,6 @@ const AppContent: React.FC = () => {
   
   const handleAnalyzeFromHub = useCallback((url: string) => {
       setSelectedDeepAnalysisUrl(url);
-      // Use a timeout to ensure state update before triggering analysis
       setTimeout(() => {
           handleDeepAnalysis();
       }, 0);
@@ -429,6 +429,14 @@ const AppContent: React.FC = () => {
     )
   }
 
+  const renderLoadingState = () => (
+    <div className="text-center py-16 flex flex-col items-center">
+      <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
+      <h2 className="text-xl font-semibold mb-2">Inizializzazione dashboard...</h2>
+      <p className="text-slate-500">Attendi un momento.</p>
+    </div>
+  );
+
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
       <div className="container mx-auto p-4 md:p-8">
@@ -444,10 +452,7 @@ const AppContent: React.FC = () => {
 
         <main>
           {!isClient ? (
-            <div className="text-center py-16 flex flex-col items-center">
-              <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
-              <h2 className="text-xl font-semibold mb-2">Inizializzazione dashboard...</h2>
-            </div>
+             renderLoadingState()
           ) : (
             <>
               {!report && !isLoading && !error && (
