@@ -76,7 +76,18 @@ export type GscDataRow = {
   position: number;
 };
 
-// --- Tipi per l'Analisi Approfondita ---
+// --- Tipi per l'Analisi Approfondita con il Sotto-Agente SEO ---
+
+export type ActionStep = {
+  title: string;
+  description: string;
+  priority: 'Alta' | 'Media' | 'Bassa';
+};
+
+export type StrategicActionPlan = {
+  executive_summary: string;
+  strategic_checklist: ActionStep[];
+};
 
 export type InboundLinkSuggestion = {
   source_url: string;
@@ -99,6 +110,7 @@ export type ContentEnhancementSuggestion = {
 export type DeepAnalysisReport = {
   analyzed_url: string;
   authority_score: number;
+  action_plan: StrategicActionPlan; // Il nuovo piano strategico
   inbound_links: InboundLinkSuggestion[];
   outbound_links: OutboundLinkSuggestion[];
   content_enhancements: ContentEnhancementSuggestion[];

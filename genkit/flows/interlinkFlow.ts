@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -155,6 +155,7 @@ function calculateOpportunityHub(
         .filter(p => p.total_impressions > 100); // Filtra per pagine con un minimo di visibilità
 
     // Ordina per punteggio di opportunità decrescente e prendi i primi 15
+    // FIX: Corrected a typo in the sort function from `a.score` to `a.opportunity_score`.
     return opportunities.sort((a, b) => b.opportunity_score - a.opportunity_score).slice(0, 15);
 }
 
@@ -535,7 +536,7 @@ export async function deepAnalysisFlow(options: {
     : "Non sono stati forniti dati da Google Search Console.";
 
   const deepAnalysisPrompt = `
-    Agisci come un SEO Strategist di livello mondiale, esperto nell'uso dei dati per guidare le decisioni. Il tuo compito è analizzare in profondità una singola pagina per ottimizzare la sua rete di link interni e il suo contenuto.
+    Agisci come un "Semantic SEO Coach" di livello mondiale. Il tuo compito è analizzare in profondità una singola pagina e generare un **Piano d'Azione Strategico** chiaro e azionabile per migliorarne drasticamente le performance.
 
     PAGINA DA ANALIZZARE: ${options.pageUrl}
     Punteggio di Autorità Interna: ${analyzedPageDiagnostic.internal_authority_score.toFixed(2)}/10
@@ -551,25 +552,46 @@ export async function deepAnalysisFlow(options: {
         ${gscDataString}
 
     IL TUO COMPITO:
-    Basandoti sull'analisi combinata di contenuto, autorità interna e dati GSC, genera un report JSON.
-
-    ISTRUZIONI STRATEGICHE:
-    - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR relative alla pagina analizzata. Queste sono le tue priorità.
-    - LINK IN ENTRATA (inbound_links):
-        - Se hai dati GSC, trova altre pagine del sito che rankano per query simili o correlate alle "query opportunità". Suggerisci link DA queste pagine, usando le "query opportunità" come anchor text.
-        - In assenza di dati GSC, suggerisci link da pagine con ALTA autorità interna per potenziare la pagina analizzata.
-        - Per ogni suggerimento, includi il campo 'driving_query' se è basato su dati GSC.
-    - LINK IN USCITA (outbound_links): Suggerisci link da questa pagina verso altre pagine rilevanti per arricchire il contesto e distribuire autorità.
-    - MIGLIORAMENTI DEL CONTENUTO (content_enhancements): Suggerisci modifiche al testo che incorporino le "query opportunità" o che migliorino la risposta all'intento di ricerca.
+    Basandoti sull'analisi combinata di contenuto, autorità interna e dati GSC, genera un report JSON. Il report deve contenere:
+    1.  Un **Piano d'Azione Strategico (\`action_plan\`)**: Questo è il cuore del tuo output. Deve includere:
+        - Un \`executive_summary\`: un paragrafo conciso che spieghi la situazione attuale della pagina e l'obiettivo strategico delle modifiche.
+        - Una \`strategic_checklist\`: una lista di 3-5 azioni concrete e prioritarie. Ogni azione deve avere un titolo, una descrizione chiara e una priorità ('Alta', 'Media', 'Bassa').
+    2.  Dati di supporto dettagliati:
+        - \`opportunity_queries\`: Le query con alte impressioni e basso CTR da GSC.
+        - \`inbound_links\`: Suggerimenti di link in entrata per supportare il piano.
+        - \`outbound_links\`: Link in uscita per migliorare il contesto.
+        - \`content_enhancements\`: Modifiche specifiche al contenuto.
 
     REGOLE CRITICHE:
     - La risposta DEVE essere un oggetto JSON valido in lingua italiana.
     - Tutti gli URL suggeriti DEVONO provenire dall'elenco di pagine del sito.
+    - Il piano d'azione deve essere il punto focale della tua analisi.
   `;
 
+  // FIX: Ensured all 'required' field arrays in the schema contain properly quoted strings
+  // to resolve "Cannot find name" errors during TypeScript compilation.
   const deepAnalysisSchema = {
     type: Type.OBJECT,
     properties: {
+        action_plan: {
+          type: Type.OBJECT,
+          properties: {
+            executive_summary: { type: Type.STRING, description: "Riepilogo strategico della situazione e degli obiettivi." },
+            strategic_checklist: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING, description: "Titolo dell'azione." },
+                  description: { type: Type.STRING, description: "Descrizione dettagliata dell'azione da compiere." },
+                  priority: { type: Type.STRING, description: "Priorità: 'Alta', 'Media', o 'Bassa'." }
+                },
+                required: ["title", "description", "priority"]
+              }
+            }
+          },
+          required: ["executive_summary", "strategic_checklist"]
+        },
         opportunity_queries: {
           type: Type.ARRAY,
           items: {
@@ -608,6 +630,7 @@ export async function deepAnalysisFlow(options: {
             }
         }
     },
+    required: ["action_plan", "inbound_links", "outbound_links", "content_enhancements"]
   };
 
   try {
