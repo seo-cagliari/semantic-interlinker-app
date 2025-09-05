@@ -30,7 +30,7 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
           </div>
           <p className="text-sm text-blue-700 mb-4">L'AI ha identificato queste query con alte impressioni ma basso CTR come opportunità per migliorare i contenuti e il linking.</p>
           <div className="flex flex-wrap gap-2">
-            {report.opportunity_queries.map((q, i) => (
+            {(report.opportunity_queries || []).map((q, i) => (
                 <div key={i} className="bg-white text-xs text-slate-700 px-2 py-1 rounded-md border border-slate-200">
                     <span className="font-semibold text-blue-800">"{q.query}"</span> (Imp: {q.impressions.toLocaleString()}, CTR: {(q.ctr * 100).toFixed(2)}%)
                 </div>
@@ -49,7 +49,7 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
           </div>
           <p className="text-sm text-slate-500">Pagine che dovrebbero collegarsi a <span className="font-semibold">questa pagina</span> per aumentarne l'autorità.</p>
           <div className="space-y-4">
-            {report.inbound_links.map((link, index) => (
+            {(report.inbound_links || []).map((link, index) => (
               <div key={index} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <p className="text-sm text-slate-500 mb-2">
                   DA: <a href={link.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{link.source_url}</a>
@@ -63,7 +63,7 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
                 <p className="text-xs text-slate-600 mt-2 italic">"{link.semantic_rationale}"</p>
               </div>
             ))}
-             {report.inbound_links.length === 0 && <p className="text-sm text-slate-400 italic">Nessun suggerimento di link in entrata ad alta priorità trovato.</p>}
+             {(!report.inbound_links || report.inbound_links.length === 0) && <p className="text-sm text-slate-400 italic">Nessun suggerimento di link in entrata ad alta priorità trovato.</p>}
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
           </div>
            <p className="text-sm text-slate-500"><span className="font-semibold">Questa pagina</span> dovrebbe collegarsi a queste risorse interne per arricchire il contenuto.</p>
           <div className="space-y-4">
-            {report.outbound_links.map((link, index) => (
+            {(report.outbound_links || []).map((link, index) => (
               <div key={index} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                  <p className="text-sm text-slate-500 mb-2">
                   A: <a href={link.target_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{link.target_url}</a>
@@ -84,7 +84,7 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
                 <p className="text-xs text-slate-600 mt-2 italic">"{link.semantic_rationale}"</p>
               </div>
             ))}
-            {report.outbound_links.length === 0 && <p className="text-sm text-slate-400 italic">Nessun suggerimento di link in uscita ad alta priorità trovato.</p>}
+            {(!report.outbound_links || report.outbound_links.length === 0) && <p className="text-sm text-slate-400 italic">Nessun suggerimento di link in uscita ad alta priorità trovato.</p>}
           </div>
         </div>
 
@@ -96,13 +96,13 @@ export const DeepAnalysisReportDisplay: React.FC<DeepAnalysisReportDisplayProps>
           </div>
           <p className="text-sm text-slate-500">Suggerimenti per arricchire il testo di <span className="font-semibold">questa pagina</span> e aumentarne la completezza.</p>
           <div className="space-y-4">
-            {report.content_enhancements.map((enhancement, index) => (
+            {(report.content_enhancements || []).map((enhancement, index) => (
               <div key={index} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
                 <h4 className="font-semibold text-slate-800">{enhancement.suggestion_title}</h4>
                 <p className="text-sm text-slate-600 mt-1">{enhancement.description}</p>
               </div>
             ))}
-             {report.content_enhancements.length === 0 && <p className="text-sm text-slate-400 italic">Nessun suggerimento per migliorare il contenuto trovato.</p>}
+             {(!report.content_enhancements || report.content_enhancements.length === 0) && <p className="text-sm text-slate-400 italic">Nessun suggerimento per migliorare il contenuto trovato.</p>}
           </div>
         </div>
 

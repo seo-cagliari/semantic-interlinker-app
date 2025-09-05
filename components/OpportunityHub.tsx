@@ -40,7 +40,7 @@ export const OpportunityHub: React.FC<OpportunityHubProps> = ({ pages, onAnalyze
               </tr>
             </thead>
             <tbody>
-              {pages.map((page, index) => (
+              {(pages || []).map((page, index) => (
                 <tr key={page.url} className="bg-white border-b hover:bg-slate-50">
                   <td className="px-6 py-4 font-bold text-blue-600">
                     <div className="flex items-center gap-2">

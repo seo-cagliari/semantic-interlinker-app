@@ -19,14 +19,14 @@ const CannibalizationTooltip: React.FC<{ details: NonNullable<Suggestion['risk_c
         <div className="mb-2">
             <h4 className="font-semibold text-slate-300">Query Contese:</h4>
             <ul className="list-disc list-inside space-y-0.5">
-                {details.competing_queries.map((q, i) => <li key={i}><span className="text-amber-300">"{q}"</span></li>)}
+                {(details.competing_queries || []).map((q, i) => <li key={i}><span className="text-amber-300">"{q}"</span></li>)}
             </ul>
         </div>
 
         <div>
             <h4 className="font-semibold text-slate-300">Consigli dell'AI:</h4>
             <ul className="list-disc list-inside space-y-0.5">
-                 {details.remediation_steps.map((s, i) => <li key={i}>{s}</li>)}
+                 {(details.remediation_steps || []).map((s, i) => <li key={i}>{s}</li>)}
             </ul>
         </div>
          <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-slate-800 rotate-45"></div>
@@ -101,7 +101,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
           </div>
           <div className="flex items-start gap-2">
             <TagIcon className="w-4 h-4 mt-0.5 text-slate-400 shrink-0 opacity-60" />
-            <div><b className="font-semibold">Varianti:</b> {anchor_variants.join(" · ")}</div>
+            <div><b className="font-semibold">Varianti:</b> {(anchor_variants || []).join(" · ")}</div>
           </div>
           <div className="flex items-start gap-2">
             <MapPinIcon className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
@@ -113,7 +113,7 @@ export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSe
           {semantic_rationale.intent_alignment_comment && (
             <div><b className="font-semibold">Analisi Intent:</b> <span className="text-slate-600">{semantic_rationale.intent_alignment_comment}</span></div>
           )}
-          <div><b className="font-semibold">Entità Comuni:</b> <span className="text-slate-600">{semantic_rationale.entities_in_common.join(", ")}</span></div>
+          <div><b className="font-semibold">Entità Comuni:</b> <span className="text-slate-600">{(semantic_rationale.entities_in_common || []).join(", ")}</span></div>
         </div>
       </div>
 

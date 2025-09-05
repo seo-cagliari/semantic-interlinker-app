@@ -25,7 +25,7 @@ export const ContentGapAnalysis: React.FC<ContentGapAnalysisProps> = ({ suggesti
         L'AI ha identificato i seguenti argomenti mancanti. Creare contenuti su questi temi può rafforzare i tuoi cluster tematici e aumentare l'autorità del sito.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {suggestions.map((suggestion, index) => (
+        {(suggestions || []).map((suggestion, index) => (
           <div 
             key={index} 
             className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm animate-fade-in-up flex flex-col justify-between" 
