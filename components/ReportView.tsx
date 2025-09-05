@@ -23,7 +23,7 @@ interface ReportViewProps {
   deepAnalysisReport: DeepAnalysisReport | null;
 }
 
-const ReportView: React.FC<ReportViewProps> = ({
+const ReportView = ({
   report,
   sortedPages,
   onAnalyzeFromHub,
@@ -37,7 +37,7 @@ const ReportView: React.FC<ReportViewProps> = ({
   isDeepLoading,
   deepError,
   deepAnalysisReport,
-}) => {
+}: ReportViewProps) => {
   return (
     <>
       {report.opportunity_hub && report.opportunity_hub.length > 0 && (

@@ -8,7 +8,7 @@ interface ModificationModalProps {
   suggestion: Suggestion | null;
 }
 
-export const ModificationModal: React.FC<ModificationModalProps> = ({ isOpen, onClose, suggestion }) => {
+export const ModificationModal = ({ isOpen, onClose, suggestion }: ModificationModalProps) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {

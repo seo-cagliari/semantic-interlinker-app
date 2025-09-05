@@ -23,7 +23,7 @@ const loadingMessages = [
   "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
 ];
 
-const DashboardClient: React.FC = () => {
+const DashboardClient = () => {
   const [site, setSite] = useLocalStorage<string | null>('semantic-interlinker-site', null);
   const [savedReport, setSavedReport] = useLocalStorage<SavedReport | null>(site ? `semantic-interlinker-report-${site}` : null, null);
 

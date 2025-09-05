@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { BrainCircuitIcon, LinkIcon, LoadingSpinnerIcon, CheckCircleIcon } from '../components/Icons';
 
-const LandingPage: React.FC = () => {
+const LandingPage = () => {
   const [formState, setFormState] = useState({ name: '', email: '', site: '' });
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

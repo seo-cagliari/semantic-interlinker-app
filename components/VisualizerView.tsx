@@ -16,7 +16,7 @@ interface VisualizerViewProps {
   report: Report;
 }
 
-const VisualizerView: React.FC<VisualizerViewProps> = ({ report }) => {
+const VisualizerView = ({ report }: VisualizerViewProps) => {
   return <SiteVisualizer report={report} />;
 };
 

@@ -6,7 +6,14 @@ interface ContentGapAnalysisProps {
   suggestions: ContentGapSuggestion[];
 }
 
-const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string | number; colorClass?: string }> = ({ icon, label, value, colorClass = 'text-slate-700' }) => (
+interface MetricProps {
+    icon: React.ReactNode;
+    label: string;
+    value: string | number;
+    colorClass?: string;
+}
+
+const Metric = ({ icon, label, value, colorClass = 'text-slate-700' }: MetricProps) => (
     <div className="flex items-center gap-2">
       {icon}
       <span className="text-xs text-slate-500">{label}:</span>
@@ -14,7 +21,7 @@ const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string | n
     </div>
 );
 
-export const ContentGapAnalysis: React.FC<ContentGapAnalysisProps> = ({ suggestions }) => {
+export const ContentGapAnalysis = ({ suggestions }: ContentGapAnalysisProps) => {
   return (
     <div className="mt-16">
       <div className="flex items-center gap-3 mb-4">

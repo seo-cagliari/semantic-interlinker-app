@@ -7,7 +7,7 @@ interface JsonModalProps {
   jsonString: string;
 }
 
-export const JsonModal: React.FC<JsonModalProps> = ({ isOpen, onClose, jsonString }) => {
+export const JsonModal = ({ isOpen, onClose, jsonString }: JsonModalProps) => {
   if (!isOpen) return null;
 
   return (

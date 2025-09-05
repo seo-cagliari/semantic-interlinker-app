@@ -30,7 +30,7 @@ interface SiteVisualizerProps {
     report: Report;
 }
 
-export const SiteVisualizer: React.FC<SiteVisualizerProps> = ({ report }) => {
+export const SiteVisualizer = ({ report }: SiteVisualizerProps) => {
     // FIX DEFINITIVO (Strategia Pragmatica):
     // Manteniamo la definizione del ref il più specifica possibile per avere il type-checking
     // corretto quando usiamo `fgRef.current`.

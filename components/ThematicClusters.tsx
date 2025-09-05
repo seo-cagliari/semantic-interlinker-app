@@ -2,7 +2,11 @@ import React from 'react';
 import { ThematicCluster } from '../types';
 import { FolderIcon } from './Icons';
 
-export const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
+interface ThematicClustersProps {
+    clusters: ThematicCluster[];
+}
+
+export const ThematicClusters = ({ clusters }: ThematicClustersProps) => (
   <div className="my-16">
     <div className="flex items-center gap-3 mb-4">
       <FolderIcon className="w-8 h-8 text-slate-500" />

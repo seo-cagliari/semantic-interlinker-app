@@ -8,7 +8,13 @@ interface ProgressReportModalProps {
   report: ProgressReport | null;
 }
 
-const MetricChange: React.FC<{ value: number; unit: string; positiveIsGood: boolean }> = ({ value, unit, positiveIsGood }) => {
+interface MetricChangeProps {
+    value: number;
+    unit: string;
+    positiveIsGood: boolean;
+}
+
+const MetricChange = ({ value, unit, positiveIsGood }: MetricChangeProps) => {
     const isPositive = value > 0;
     const isNegative = value < 0;
     const isNeutral = Math.abs(value) < 0.01;
@@ -32,7 +38,7 @@ const MetricChange: React.FC<{ value: number; unit: string; positiveIsGood: bool
 };
 
 
-export const ProgressReportModal: React.FC<ProgressReportModalProps> = ({ isOpen, onClose, report }) => {
+export const ProgressReportModal = ({ isOpen, onClose, report }: ProgressReportModalProps) => {
   if (!isOpen) return null;
 
   return (

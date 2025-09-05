@@ -10,8 +10,11 @@ interface SuggestionCardProps {
   onToggleSelection: (suggestionId: string) => void;
 }
 
+interface CannibalizationTooltipProps {
+    details: NonNullable<Suggestion['risk_checks']['cannibalization_details']>;
+}
 
-const CannibalizationTooltip: React.FC<{ details: NonNullable<Suggestion['risk_checks']['cannibalization_details']> }> = ({ details }) => (
+const CannibalizationTooltip = ({ details }: CannibalizationTooltipProps) => (
     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 md:w-80 p-3 rounded-lg shadow-xl bg-slate-800 text-white text-xs z-20 
                    opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 pointer-events-none">
         <div className="font-bold mb-2 border-b border-slate-600 pb-1">Diagnosi Cannibalizzazione</div>
@@ -33,8 +36,14 @@ const CannibalizationTooltip: React.FC<{ details: NonNullable<Suggestion['risk_c
     </div>
 );
 
+interface RiskCheckItemProps {
+    label: string;
+    value: boolean;
+    isWarning?: boolean;
+    children?: React.ReactNode;
+}
 
-const RiskCheckItem: React.FC<{ label: string; value: boolean; isWarning?: boolean; children?: React.ReactNode }> = ({ label, value, isWarning = false, children }) => {
+const RiskCheckItem = ({ label, value, isWarning = false, children }: RiskCheckItemProps) => {
     const Icon = value ? (isWarning ? ExclamationTriangleIcon : CheckCircleIcon) : CheckCircleIcon;
     const colorClass = value ? (isWarning ? 'text-yellow-600' : 'text-green-600') : 'text-green-600';
     const text = value ? (isWarning ? 'Rilevato' : 'Sì') : 'No';
@@ -50,7 +59,7 @@ const RiskCheckItem: React.FC<{ label: string; value: boolean; isWarning?: boole
 };
 
 
-export const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, isSelected, onViewJson, onViewModification, onToggleSelection }) => {
+export const SuggestionCard = ({ suggestion, isSelected, onViewJson, onViewModification, onToggleSelection }: SuggestionCardProps) => {
   const { 
     source_url, 
     target_url, 

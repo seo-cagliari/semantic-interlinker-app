@@ -26,7 +26,7 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
 }
 
-const ReportDisplay: React.FC<ReportDisplayProps> = (props) => {
+const ReportDisplay = (props: ReportDisplayProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   return (
