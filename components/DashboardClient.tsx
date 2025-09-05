@@ -1,69 +1,14 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport } from '../types';
-import { SuggestionCard } from './SuggestionCard';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
-import { ContentGapAnalysis } from './ContentGapAnalysis';
-import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
 import { GscConnect } from './GscConnect';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from './Icons';
+import { BrainCircuitIcon, LoadingSpinnerIcon, XCircleIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
-import { OpportunityHub } from './OpportunityHub';
 import useLocalStorage from '../hooks/useLocalStorage';
-
-const SiteVisualizerSkeleton = () => (
-    <div className="border border-slate-200 rounded-2xl bg-white shadow-lg relative h-[70vh] flex items-center justify-center animate-fade-in-up">
-        <div className="text-center">
-            <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <p className="text-slate-600 font-semibold">Caricamento visualizzatore...</p>
-            <p className="text-slate-500 text-sm mt-1">L'architettura del sito è in fase di rendering.</p>
-        </div>
-    </div>
-);
-
-const SiteVisualizer = dynamic(
-  () => import('./SiteVisualizer').then(mod => mod.SiteVisualizer),
-  { 
-    ssr: false,
-    loading: () => <SiteVisualizerSkeleton />
-  }
-);
-
-type ViewMode = 'report' | 'visualizer';
-type StrategyOptions = { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
-
-const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
-  <div className="my-16">
-    <div className="flex items-center gap-3 mb-4">
-      <FolderIcon className="w-8 h-8 text-slate-500" />
-      <h2 className="text-2xl font-bold text-slate-800">Mappa Tematica del Sito</h2>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {(clusters || []).map((cluster, index) => (
-        <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-          <h3 className="font-bold text-slate-900 mb-2">{cluster.cluster_name}</h3>
-          <p className="text-sm text-slate-600 mb-4">{cluster.cluster_description}</p>
-          <div className="border-t border-slate-200 pt-3">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Pagine nel cluster</h4>
-            <ul className="space-y-1">
-              {(cluster.pages || []).slice(0, 5).map((page, pageIndex) => (
-                <li key={pageIndex} className="text-sm text-blue-600 truncate">
-                  <a href={page} target="_blank" rel="noopener noreferrer" className="hover:underline" title={page}>
-                    {page.split('/').filter(Boolean).pop() || page}
-                  </a>
-                </li>
-              ))}
-              {cluster.pages && cluster.pages.length > 5 && <li className="text-xs text-slate-400 mt-1">...e altre {cluster.pages.length - 5}</li>}
-            </ul>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
+import ReportDisplay from './ReportDisplay'; // Import the new component
 
 const loadingMessages = [
   "Avvio dell'analisi strategica...",
@@ -85,7 +30,6 @@ const DashboardClient: React.FC = () => {
   const [report, setReport] = useState<Report | null>(savedReport?.report || null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -109,12 +53,6 @@ const DashboardClient: React.FC = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  const sortedPageDiagnostics = useMemo(() => {
-    if (!report?.page_diagnostics) return [];
-    // Create a new sorted array instead of sorting in-place
-    return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-  }, [report?.page_diagnostics]);
 
   useEffect(() => {
      if (savedReport) {
@@ -153,7 +91,6 @@ const DashboardClient: React.FC = () => {
     return cleanup;
   }, [isLoading]);
 
-  // Cleanup effect for AbortController
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -162,7 +99,7 @@ const DashboardClient: React.FC = () => {
     };
   }, []);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => {
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] }) => {
     setIsLoading(true);
     setReport(null);
     setError(null);
@@ -170,10 +107,8 @@ const DashboardClient: React.FC = () => {
     setDeepError(null);
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
-    setViewMode('report');
     setGscData(gscDataPayload);
     
-    // Create and store a new AbortController for this specific request
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -188,17 +123,15 @@ const DashboardClient: React.FC = () => {
             seozoomApiKey: seozoomApiKey,
             strategyOptions: strategyOptions
           }),
-          signal: controller.signal // Pass the signal to the fetch request
+          signal: controller.signal
         });
         
         if (!apiResponse.ok) {
             let errorDetails = `Server responded with status ${apiResponse.status}.`;
             try {
-                // Try to get more specific error details from the response
                 const errorData = await apiResponse.json();
                 errorDetails = errorData.details || errorData.error || errorDetails;
             } catch (e) {
-                // If the response is not JSON (e.g., HTML error page from timeout), read it as text.
                 errorDetails = await apiResponse.text();
             }
             throw new Error(errorDetails);
@@ -208,7 +141,7 @@ const DashboardClient: React.FC = () => {
         const reportToSave: SavedReport = { report: responseData, timestamp: Date.now() };
         
         setSite(siteUrl);
-        setSavedReport(reportToSave); // Questo salverà su localStorage
+        setSavedReport(reportToSave);
         setReport(responseData);
 
         if (responseData.page_diagnostics && responseData.page_diagnostics.length > 0) {
@@ -224,15 +157,21 @@ const DashboardClient: React.FC = () => {
         }
     } finally {
         setIsLoading(false);
-        abortControllerRef.current = null; // Clean up the controller
+        abortControllerRef.current = null;
     }
   }, [setSite, setSavedReport]);
 
-  const handleDeepAnalysis = useCallback(async () => {
-    if (!selectedDeepAnalysisUrl || !report?.page_diagnostics) {
+  const handleDeepAnalysis = useCallback(async (urlToAnalyze?: string) => {
+    const finalUrl = urlToAnalyze || selectedDeepAnalysisUrl;
+    if (!finalUrl || !report?.page_diagnostics) {
       setDeepError("Seleziona una pagina da analizzare.");
       return;
     }
+    
+    if (urlToAnalyze) {
+        setSelectedDeepAnalysisUrl(urlToAnalyze);
+    }
+
     setIsDeepLoading(true);
     setDeepAnalysisReport(null);
     setDeepError(null);
@@ -245,7 +184,7 @@ const DashboardClient: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pageUrl: selectedDeepAnalysisUrl,
+          pageUrl: finalUrl,
           pageDiagnostics: report.page_diagnostics,
           gscData: gscData
         })
@@ -297,13 +236,6 @@ const DashboardClient: React.FC = () => {
     }
   }, [savedReport]);
   
-  const handleAnalyzeFromHub = useCallback((url: string) => {
-      setSelectedDeepAnalysisUrl(url);
-      setTimeout(() => {
-          handleDeepAnalysis();
-      }, 0);
-  }, [handleDeepAnalysis]);
-
   const handleNewAnalysis = () => {
     setReport(null);
     setError(null);
@@ -378,151 +310,24 @@ const DashboardClient: React.FC = () => {
           )}
 
           {report && (
-            <div className="animate-fade-in-up">
-              <div className="mb-10">
-                <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
-                  <h2 className="text-3xl font-bold text-slate-800">Report Strategico</h2>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                      {viewMode === 'report' ? (
-                        <>
-                          <RectangleGroupIcon className="w-5 h-5"/>
-                          Visualizza Architettura
-                        </>
-                      ) : (
-                        <>
-                          <DocumentTextIcon className="w-5 h-5"/>
-                          Visualizza Report
-                        </>
-                      )}
-                    </button>
-                    <button
-                        onClick={handleNewAnalysis}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                        <ArrowPathIcon className="w-5 h-5" />
-                        Nuova Analisi
-                    </button>
-                    {savedReport && (
-                        <button
-                            onClick={handleProgressCheck}
-                            disabled={isProgressLoading}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
-                        >
-                            {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
-                            Controlla Progresso
-                        </button>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div className="bg-slate-100 p-4 rounded-lg">
-                    <p className="text-sm text-slate-500">Pagine Scansite</p>
-                    <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
-                  </div>
-                  <div className="bg-slate-100 p-4 rounded-lg">
-                    <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
-                    <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
-                  </div>
-                  <div className="bg-slate-100 p-4 rounded-lg">
-                    <p className="text-sm text-slate-500">Suggerimenti</p>
-                    <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
-                  </div>
-                  <div className="bg-green-100 p-4 rounded-lg">
-                    <p className="text-sm text-green-600">Priorità Alta</p>
-                    <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
-                  </div>
-                </div>
-              </div>
-
-              {viewMode === 'visualizer' ? (
-                <SiteVisualizer report={report} />
-              ) : (
-                <>
-                  {report.opportunity_hub && report.opportunity_hub.length > 0 && (
-                    <OpportunityHub pages={report.opportunity_hub} onAnalyze={handleAnalyzeFromHub} />
-                  )}
-
-                  {report.thematic_clusters && report.thematic_clusters.length > 0 && (
-                    <ThematicClusters clusters={report.thematic_clusters} />
-                  )}
-                  
-                  {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
-                    <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
-                  )}
-                  
-                  <div className="flex items-center gap-3 mb-4 mt-16">
-                    <LinkIcon className="w-8 h-8 text-slate-500" />
-                    <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
-                  </div>
-                  <div className="space-y-6">
-                    {(report.suggestions || []).map((suggestion, index) => (
-                      <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-                        <SuggestionCard
-                          suggestion={suggestion}
-                          isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
-                          onViewJson={handleViewJson}
-                          onViewModification={handleViewModification}
-                          onToggleSelection={handleToggleSelection}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
-                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
-                    <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
-                    <div className="bg-white p-4 rounded-lg border border-slate-200">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                        <div className="md:col-span-2">
-                          <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
-                          <select
-                            value={selectedDeepAnalysisUrl}
-                            onChange={(e) => setSelectedDeepAnalysisUrl(e.target.value)}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-                          >
-                            {sortedPageDiagnostics.map(page => (
-                              <option key={page.url} value={page.url}>
-                                [{page.internal_authority_score.toFixed(1)}] - {page.title}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <button
-                            onClick={handleDeepAnalysis}
-                            disabled={isDeepLoading}
-                            className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
-                          >
-                            {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
-                            Analisi Dettagliata
-                          </button>
-                        </div>
-                      </div>
-                      {deepError &&
-                        <div className="mt-4 flex items-center gap-2 text-red-600">
-                          <XCircleIcon className="w-5 h-5" />
-                          <p className="text-sm">{deepError}</p>
-                        </div>
-                      }
-                    </div>
-                  </div>
-
-                  {isDeepLoading && !deepAnalysisReport && (
-                    <div className="text-center py-12 flex flex-col items-center">
-                      <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
-                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h2>
-                      <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
-                    </div>
-                  )}
-
-                  {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
-                </>
-              )}
-            </div>
+            <ReportDisplay
+              report={report}
+              savedReport={savedReport}
+              isProgressLoading={isProgressLoading}
+              onProgressCheck={handleProgressCheck}
+              onNewAnalysis={handleNewAnalysis}
+              onAnalyzeFromHub={(url) => handleDeepAnalysis(url)}
+              selectedSuggestions={selectedSuggestions}
+              onViewJson={handleViewJson}
+              onViewModification={handleViewModification}
+              onToggleSelection={handleToggleSelection}
+              selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
+              onSetSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
+              onDeepAnalysis={handleDeepAnalysis}
+              isDeepLoading={isDeepLoading}
+              deepError={deepError}
+              deepAnalysisReport={deepAnalysisReport}
+            />
           )}
         </main>
       </div>
