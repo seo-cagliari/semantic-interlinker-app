@@ -151,8 +151,8 @@ export const wp = {
 
     } catch(error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      console.error(`Failed to get page content for ${pageUrl}:`, errorMessage);
-      throw new Error(`Could not retrieve content from WordPress for ${pageUrl}: ${errorMessage}`);
+      console.error(`Failed to fetch content for ${pageUrl}:`, errorMessage);
+      throw new Error(`Could not retrieve content for page ${pageUrl}: ${errorMessage}`);
     }
-  },
+  }
 };

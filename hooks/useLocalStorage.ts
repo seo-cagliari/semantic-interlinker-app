@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 
-function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
+function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | null) => void] {
   // Lo stato viene inizializzato solo una volta con una funzione, 
   // che viene eseguita solo sul client.
   const [storedValue, setStoredValue] = useState<T>(() => {
     // Questo codice viene eseguito solo sul client, evitando errori SSR
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || !key) {
       return initialValue;
     }
     try {
@@ -27,7 +27,8 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => voi
     }
   });
 
-  const setValue = (value: T) => {
+  const setValue = (value: T | null) => {
+    if (!key) return;
     try {
       // Permetti a 'value' di essere una funzione per avere la stessa API di useState
       const valueToStore = value instanceof Function ? value(storedValue) : value;

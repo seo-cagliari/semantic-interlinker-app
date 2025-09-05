@@ -1,3 +1,4 @@
+import { google } from 'googleapis';
 import { NextRequest } from 'next/server';
 import { serialize } from 'cookie';
 
@@ -74,38 +75,16 @@ export async function GET(req: NextRequest) {
     return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
   const redirectUri = `${baseUrl}/api/gsc/callback`;
-  let tokens;
 
   try {
-    const tokenEndpoint = 'https://oauth2.googleapis.com/token';
-    const tokenResponse = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code: code,
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
-    });
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
 
-    if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        let errorPayload;
-        try {
-            errorPayload = JSON.parse(errorText);
-        } catch (e) {
-            errorPayload = { 
-                error: 'non_json_response', 
-                error_description: 'La risposta di errore da Google non era un JSON valido.',
-                raw_response: errorText 
-            };
-        }
-        throw errorPayload;
-    }
-
-    tokens = await tokenResponse.json();
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
     const cookie = serialize('gsc_token', JSON.stringify(tokens), {
       httpOnly: true,
@@ -115,9 +94,8 @@ export async function GET(req: NextRequest) {
       sameSite: 'lax',
     });
     
-    // FIX: Construct the Response object with all headers at once to avoid immutable errors.
     return new Response(null, {
-      status: 302, // Found (Redirect)
+      status: 302,
       headers: {
         'Location': `${baseUrl}/dashboard`,
         'Set-Cookie': cookie,
@@ -127,10 +105,12 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error('Raw error during Google Token exchange:', err);
     
+    const errorResponse = err.response?.data || {};
+
     let message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>
                      <p>Questo di solito indica un problema di configurazione nel tuo progetto Google Cloud. Analizza la risposta grezza qui sotto per identificare la causa del problema.</p>`;
 
-    if (err.error === 'redirect_uri_mismatch') {
+    if (errorResponse.error === 'redirect_uri_mismatch') {
         message += `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
                     <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
                     <p><b>VERIFICA QUESTI VALORI:</b></p>
@@ -138,7 +118,7 @@ export async function GET(req: NextRequest) {
                         <li><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code></li>
                         <li>Assicurati che questo esatto valore sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
                     </ul>`;
-    } else if (err.error === 'invalid_client') {
+    } else if (errorResponse.error === 'invalid_client') {
         message += `<h3>Diagnosi Specifica: <code>invalid_client</code></h3>
                     <p>L'autenticazione del client è fallita. Questo quasi sempre significa che il <b>Client Secret</b> non è corretto.</p>
                     <p><b>AZIONE RICHIESTA:</b></p>
@@ -154,28 +134,10 @@ export async function GET(req: NextRequest) {
                      </ul>`;
     }
 
-    // Create a serializable object from the error to ensure it's displayed correctly.
-    const serializableError = {
-        error: err.error,
-        error_description: err.error_description,
-        error_uri: err.error_uri,
-        raw_response: err.raw_response,
-        name: err.name,
-        message: err.message,
-    };
-
-    // Filter out undefined/null properties for a cleaner display
-    const finalErrorObject = Object.entries(serializableError).reduce((acc, [key, value]) => {
-        if (value) {
-            acc[key] = value;
-        }
-        return acc;
-    }, {} as Record<string, any>);
-
     return renderErrorPage(
         'Errore di Autenticazione (Diagnosi Avanzata)', 
         message,
-        finalErrorObject
+        errorResponse
     );
   }
 }
