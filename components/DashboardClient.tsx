@@ -334,7 +334,7 @@ const DashboardClient: React.FC = () => {
     });
   }, []);
 
-  const renderSummaryAndActions = () => {
+  const summaryAndActions = useMemo(() => {
     if (!report) return null;
     return (
       <div className="mb-10">
@@ -396,7 +396,8 @@ const DashboardClient: React.FC = () => {
         </div>
       </div>
     );
-  };
+  }, [report, viewMode, savedReport, isProgressLoading, handleNewAnalysis, handleProgressCheck]);
+
 
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
@@ -443,7 +444,7 @@ const DashboardClient: React.FC = () => {
 
           {report && (
             <div className="animate-fade-in-up">
-              {renderSummaryAndActions()}
+              {summaryAndActions}
 
               {viewMode === 'visualizer' ? (
                 <SiteVisualizer report={report} />
