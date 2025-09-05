@@ -334,71 +334,6 @@ const DashboardClient: React.FC = () => {
     });
   }, []);
 
-  const summaryAndActions = useMemo(() => {
-    if (!report) return null;
-    return (
-      <div className="mb-10">
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
-           <h2 className="text-3xl font-bold text-slate-800">Report Strategico</h2>
-           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              {viewMode === 'report' ? (
-                <>
-                  <RectangleGroupIcon className="w-5 h-5"/>
-                  Visualizza Architettura
-                </>
-              ) : (
-                <>
-                  <DocumentTextIcon className="w-5 h-5"/>
-                  Visualizza Report
-                </>
-              )}
-            </button>
-            <button
-                onClick={handleNewAnalysis}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-                <ArrowPathIcon className="w-5 h-5" />
-                Nuova Analisi
-            </button>
-            {savedReport && (
-                <button
-                    onClick={handleProgressCheck}
-                    disabled={isProgressLoading}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
-                >
-                    {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
-                    Controlla Progresso
-                </button>
-            )}
-           </div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div className="bg-slate-100 p-4 rounded-lg">
-            <p className="text-sm text-slate-500">Pagine Scansite</p>
-            <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
-          </div>
-          <div className="bg-slate-100 p-4 rounded-lg">
-            <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
-            <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
-          </div>
-          <div className="bg-slate-100 p-4 rounded-lg">
-            <p className="text-sm text-slate-500">Suggerimenti</p>
-            <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
-          </div>
-          <div className="bg-green-100 p-4 rounded-lg">
-            <p className="text-sm text-green-600">Priorità Alta</p>
-            <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }, [report, viewMode, savedReport, isProgressLoading, handleNewAnalysis, handleProgressCheck]);
-
-
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">
       <div className="container mx-auto p-4 md:p-8">
@@ -444,7 +379,64 @@ const DashboardClient: React.FC = () => {
 
           {report && (
             <div className="animate-fade-in-up">
-              {summaryAndActions}
+              <div className="mb-10">
+                <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+                  <h2 className="text-3xl font-bold text-slate-800">Report Strategico</h2>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setViewMode(prev => prev === 'report' ? 'visualizer' : 'report')}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      {viewMode === 'report' ? (
+                        <>
+                          <RectangleGroupIcon className="w-5 h-5"/>
+                          Visualizza Architettura
+                        </>
+                      ) : (
+                        <>
+                          <DocumentTextIcon className="w-5 h-5"/>
+                          Visualizza Report
+                        </>
+                      )}
+                    </button>
+                    <button
+                        onClick={handleNewAnalysis}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                        <ArrowPathIcon className="w-5 h-5" />
+                        Nuova Analisi
+                    </button>
+                    {savedReport && (
+                        <button
+                            onClick={handleProgressCheck}
+                            disabled={isProgressLoading}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
+                        >
+                            {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                            Controlla Progresso
+                        </button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div className="bg-slate-100 p-4 rounded-lg">
+                    <p className="text-sm text-slate-500">Pagine Scansite</p>
+                    <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
+                  </div>
+                  <div className="bg-slate-100 p-4 rounded-lg">
+                    <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
+                    <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
+                  </div>
+                  <div className="bg-slate-100 p-4 rounded-lg">
+                    <p className="text-sm text-slate-500">Suggerimenti</p>
+                    <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
+                  </div>
+                  <div className="bg-green-100 p-4 rounded-lg">
+                    <p className="text-sm text-green-600">Priorità Alta</p>
+                    <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
+                  </div>
+                </div>
+              </div>
 
               {viewMode === 'visualizer' ? (
                 <SiteVisualizer report={report} />
