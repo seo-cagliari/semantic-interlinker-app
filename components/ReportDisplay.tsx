@@ -1,24 +1,13 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, SavedReport, ProgressReport } from '../types';
+import { Suggestion, Report, DeepAnalysisReport, PageDiagnostic, SavedReport } from '../types';
 import { SuggestionCard } from './SuggestionCard';
-import { JsonModal } from './JsonModal';
-import { ModificationModal } from './ModificationModal';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
-import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from './Icons';
-import { ProgressReportModal } from './ProgressReportModal';
+import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from './Icons';
 import { OpportunityHub } from './OpportunityHub';
-
-const SiteVisualizerSkeleton = () => (
-    <div className="border border-slate-200 rounded-2xl bg-white shadow-lg relative h-[70vh] flex items-center justify-center animate-fade-in-up">
-        <div className="text-center">
-            <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <p className="text-slate-600 font-semibold">Caricamento visualizzatore...</p>
-            <p className="text-slate-500 text-sm mt-1">L'architettura del sito è in fase di rendering.</p>
-        </div>
-    </div>
-);
+import { ThematicClusters } from './ThematicClusters';
+import { SiteVisualizerSkeleton } from './SiteVisualizerSkeleton';
 
 const SiteVisualizer = dynamic(
   () => import('./SiteVisualizer').then(mod => mod.SiteVisualizer),
@@ -29,37 +18,6 @@ const SiteVisualizer = dynamic(
 );
 
 type ViewMode = 'report' | 'visualizer';
-
-const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
-  <div className="my-16">
-    <div className="flex items-center gap-3 mb-4">
-      <FolderIcon className="w-8 h-8 text-slate-500" />
-      <h2 className="text-2xl font-bold text-slate-800">Mappa Tematica del Sito</h2>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {(clusters || []).map((cluster, index) => (
-        <div key={index} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-          <h3 className="font-bold text-slate-900 mb-2">{cluster.cluster_name}</h3>
-          <p className="text-sm text-slate-600 mb-4">{cluster.cluster_description}</p>
-          <div className="border-t border-slate-200 pt-3">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Pagine nel cluster</h4>
-            <ul className="space-y-1">
-              {(cluster.pages || []).slice(0, 5).map((page, pageIndex) => (
-                <li key={pageIndex} className="text-sm text-blue-600 truncate">
-                  <a href={page} target="_blank" rel="noopener noreferrer" className="hover:underline" title={page}>
-                    {page.split('/').filter(Boolean).pop() || page}
-                  </a>
-                </li>
-              ))}
-              {cluster.pages && cluster.pages.length > 5 && <li className="text-xs text-slate-400 mt-1">...e altre {cluster.pages.length - 5}</li>}
-            </ul>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
 
 interface ReportDisplayProps {
   report: Report;
@@ -100,10 +58,11 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
+  const pageDiagnostics = report?.page_diagnostics || [];
   const sortedPageDiagnostics = useMemo(() => {
-    if (!report?.page_diagnostics) return [];
-    return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-  }, [report?.page_diagnostics]);
+    // Create a new array to sort, preventing mutation of the original prop
+    return [...pageDiagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
+  }, [pageDiagnostics]);
 
   return (
     <div className="animate-fade-in-up">
