@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
-import { NextRequest } from 'next/server';
-import { serialize } from 'cookie';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
@@ -70,10 +69,6 @@ export async function GET(req: NextRequest) {
   }
 
   const baseUrl = process.env.APP_BASE_URL;
-  if (!baseUrl) {
-    const errorMessage = `Errore di configurazione del server: La variabile d'ambiente APP_BASE_URL non è definita.`;
-    return renderErrorPage('Errore di Configurazione del Server', errorMessage);
-  }
   const redirectUri = `${baseUrl}/api/gsc/callback`;
 
   try {
@@ -86,21 +81,18 @@ export async function GET(req: NextRequest) {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    const cookie = serialize('gsc_token', JSON.stringify(tokens), {
+    // Use NextResponse for robust redirection and cookie setting
+    const response = NextResponse.redirect(new URL('/dashboard', baseUrl));
+    
+    response.cookies.set('gsc_token', JSON.stringify(tokens), {
       httpOnly: true,
       secure: process.env.NODE_ENV !== 'development',
-      maxAge: 60 * 60 * 24 * 30, // 30 giorni
+      maxAge: 60 * 60 * 24 * 30, // 30 days
       path: '/',
       sameSite: 'lax',
     });
     
-    return new Response(null, {
-      status: 302,
-      headers: {
-        'Location': `${baseUrl}/dashboard`,
-        'Set-Cookie': cookie,
-      },
-    });
+    return response;
 
   } catch (err: any) {
     console.error('Raw error during Google Token exchange:', err);
