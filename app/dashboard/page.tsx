@@ -103,6 +103,8 @@ const AppContent: React.FC = () => {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
+  const [isClient, setIsClient] = useState<boolean>(false);
+
   useEffect(() => {
     const cleanup = () => {
       if (loadingIntervalRef.current) {
@@ -131,6 +133,7 @@ const AppContent: React.FC = () => {
   }, [isLoading]);
 
   useEffect(() => {
+    // This effect runs only on the client side, after hydration
     try {
       const savedSite = localStorage.getItem('semantic-interlinker-site');
       if (savedSite) {
@@ -138,7 +141,6 @@ const AppContent: React.FC = () => {
         if (item) {
           const parsedItem: SavedReport = JSON.parse(item);
           setSavedReport(parsedItem);
-          // Automatically load the report if it exists
           setReport(parsedItem.report);
            if (parsedItem.report.page_diagnostics && parsedItem.report.page_diagnostics.length > 0) {
             const sortedPages = [...parsedItem.report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
@@ -149,6 +151,9 @@ const AppContent: React.FC = () => {
     } catch (error) {
       console.error("Failed to load saved report from localStorage", error);
       localStorage.removeItem('semantic-interlinker-site');
+    } finally {
+      // Signal that client-side initialization is complete
+      setIsClient(true);
     }
   }, []);
 
@@ -438,85 +443,94 @@ const AppContent: React.FC = () => {
         </header>
 
         <main>
-          {!report && !isLoading && !error && (
-            <GscConnect 
-              onAnalysisStart={handleStartAnalysis}
-              savedReport={savedReport}
-              onProgressCheck={handleProgressCheck}
-              isProgressLoading={isProgressLoading}
-              progressError={progressError}
-            />
-          )}
-
-          {isLoading && (
-             <div className="text-center py-16 flex flex-col items-center">
-                <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
-                <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
-                <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>{loadingMessage}</p>
-             </div>
-          )}
-
-          {error && (
-            <div className="text-center py-12 max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md border border-red-200">
-              <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
-              <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
-              <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
-              <button onClick={() => { setError(null); setIsLoading(false); handleNewAnalysis(); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
-                  Riprova
-              </button>
+          {!isClient ? (
+            <div className="text-center py-16 flex flex-col items-center">
+              <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
+              <h2 className="text-xl font-semibold mb-2">Inizializzazione dashboard...</h2>
             </div>
-          )}
-
-          {report && (
-            <div className="animate-fade-in-up">
-              {renderSummaryAndActions()}
-
-              {viewMode === 'visualizer' ? (
-                <SiteVisualizer report={report} />
-              ) : (
-                <>
-                  {report.opportunity_hub && report.opportunity_hub.length > 0 && (
-                    <OpportunityHub pages={report.opportunity_hub} onAnalyze={handleAnalyzeFromHub} />
-                  )}
-
-                  {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
-                  
-                  {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
-                    <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
-                  )}
-                  
-                  <div className="flex items-center gap-3 mb-4 mt-16">
-                    <LinkIcon className="w-8 h-8 text-slate-500" />
-                    <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
-                  </div>
-                  <div className="space-y-6">
-                    {report.suggestions.map((suggestion, index) => (
-                      <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-                        <SuggestionCard
-                          suggestion={suggestion}
-                          isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
-                          onViewJson={handleViewJson}
-                          onViewModification={handleViewModification}
-                          onToggleSelection={handleToggleSelection}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {renderDeepAnalysisSection()}
-
-                  {isDeepLoading && !deepAnalysisReport && (
-                    <div className="text-center py-12 flex flex-col items-center">
-                      <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
-                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
-                      <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
-                    </div>
-                  )}
-
-                  {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
-                </>
+          ) : (
+            <>
+              {!report && !isLoading && !error && (
+                <GscConnect 
+                  onAnalysisStart={handleStartAnalysis}
+                  savedReport={savedReport}
+                  onProgressCheck={handleProgressCheck}
+                  isProgressLoading={isProgressLoading}
+                  progressError={progressError}
+                />
               )}
-            </div>
+
+              {isLoading && (
+                 <div className="text-center py-16 flex flex-col items-center">
+                    <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
+                    <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
+                    <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>{loadingMessage}</p>
+                 </div>
+              )}
+
+              {error && (
+                <div className="text-center py-12 max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md border border-red-200">
+                  <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                  <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
+                  <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
+                  <button onClick={() => { setError(null); setIsLoading(false); handleNewAnalysis(); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+                      Riprova
+                  </button>
+                </div>
+              )}
+
+              {report && (
+                <div className="animate-fade-in-up">
+                  {renderSummaryAndActions()}
+
+                  {viewMode === 'visualizer' ? (
+                    <SiteVisualizer report={report} />
+                  ) : (
+                    <>
+                      {report.opportunity_hub && report.opportunity_hub.length > 0 && (
+                        <OpportunityHub pages={report.opportunity_hub} onAnalyze={handleAnalyzeFromHub} />
+                      )}
+
+                      {report.thematic_clusters && <ThematicClusters clusters={report.thematic_clusters} />}
+                      
+                      {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                        <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+                      )}
+                      
+                      <div className="flex items-center gap-3 mb-4 mt-16">
+                        <LinkIcon className="w-8 h-8 text-slate-500" />
+                        <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
+                      </div>
+                      <div className="space-y-6">
+                        {report.suggestions.map((suggestion, index) => (
+                          <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                            <SuggestionCard
+                              suggestion={suggestion}
+                              isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
+                              onViewJson={handleViewJson}
+                              onViewModification={handleViewModification}
+                              onToggleSelection={handleToggleSelection}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {renderDeepAnalysisSection()}
+
+                      {isDeepLoading && !deepAnalysisReport && (
+                        <div className="text-center py-12 flex flex-col items-center">
+                          <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
+                          <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
+                          <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
+                        </div>
+                      )}
+
+                      {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>
