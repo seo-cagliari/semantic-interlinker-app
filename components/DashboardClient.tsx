@@ -80,7 +80,7 @@ const loadingMessages = [
 
 const DashboardClient: React.FC = () => {
   const [site, setSite] = useLocalStorage<string | null>('semantic-interlinker-site', null);
-  const [savedReport, setSavedReport] = useLocalStorage<SavedReport | null>(site ? `semantic-interlinker-report-${site}`: '', null);
+  const [savedReport, setSavedReport] = useLocalStorage<SavedReport | null>(site ? `semantic-interlinker-report-${site}` : null, null);
 
   const [report, setReport] = useState<Report | null>(savedReport?.report || null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -522,7 +522,7 @@ const DashboardClient: React.FC = () => {
                   {isDeepLoading && !deepAnalysisReport && (
                     <div className="text-center py-12 flex flex-col items-center">
                       <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
-                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h3>
+                      <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h2>
                       <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
                     </div>
                   )}

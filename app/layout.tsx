@@ -1,5 +1,6 @@
 import React from 'react';
-import type { Metadata } from 'next';
+// FIX: Changed from 'import type' to 'import' to resolve module resolution error.
+import { Metadata } from 'next';
 import { Inter, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
 

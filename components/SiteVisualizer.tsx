@@ -4,11 +4,16 @@ import { Report } from '../types';
 import { BrainCircuitIcon } from './Icons';
 
 // Definiamo un tipo che estende NodeObject per includere le nostre proprietà custom.
+// FIX: Explicitly add optional x and y properties to the MyNode interface.
+// These properties are added by the force-graph engine at runtime, and this
+// change informs TypeScript of their existence, resolving compiler errors.
 interface MyNode extends NodeObject {
     id: string;
     name: string;
     val: number;
     score: number;
+    x?: number;
+    y?: number;
 }
 
 const colorPalette = [
