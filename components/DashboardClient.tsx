@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
 import { Suggestion, Report, ThematicCluster, DeepAnalysisReport, PageDiagnostic, GscDataRow, SavedReport, ProgressReport, OpportunityPage } from '../types';
 import { SuggestionCard } from './SuggestionCard';
 import { JsonModal } from './JsonModal';
@@ -12,25 +11,11 @@ import { GscConnect } from './GscConnect';
 import { BrainCircuitIcon, DocumentTextIcon, LinkIcon, LoadingSpinnerIcon, XCircleIcon, FolderIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
 import { OpportunityHub } from './OpportunityHub';
+import { SiteVisualizer } from './SiteVisualizer';
+
 
 type ViewMode = 'report' | 'visualizer';
 type StrategyOptions = { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
-
-
-const SiteVisualizer = dynamic(
-  () => import('./SiteVisualizer').then(mod => mod.SiteVisualizer),
-  { 
-    ssr: false,
-    loading: () => (
-      <div className="flex justify-center items-center h-[70vh] border border-slate-200 rounded-2xl bg-white shadow-lg">
-        <div className="text-center">
-          <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4"/>
-          <p className="text-slate-600 font-semibold">Caricamento visualizzatore...</p>
-        </div>
-      </div>
-    )
-  }
-);
 
 const ThematicClusters: React.FC<{ clusters: ThematicCluster[] }> = ({ clusters }) => (
   <div className="my-16">
