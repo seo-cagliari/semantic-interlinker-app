@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
                         <li>Assicurati che questo esatto valore sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
                     </ul>`;
     } else if (errorResponse.error === 'invalid_client') {
-        message += `<h3>Diagnosi Specifica: <code>invalid_client</code></h3>
+        message += `<h3>Diagnosi Specifica: code>invalid_client</code></h3>
                     <p>L'autenticazione del client è fallita. Questo quasi sempre significa che il <b>Client Secret</b> non è corretto.</p>
                     <p><b>AZIONE RICHIESTA:</b></p>
                     <ul>

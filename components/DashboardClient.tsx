@@ -108,6 +108,8 @@ const DashboardClient: React.FC = () => {
   const [progressError, setProgressError] = useState<string | null>(null);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
      if (savedReport) {
         setReport(savedReport.report);
@@ -145,6 +147,15 @@ const DashboardClient: React.FC = () => {
     return cleanup;
   }, [isLoading]);
 
+  // Cleanup effect for AbortController
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => {
     setIsLoading(true);
     setReport(null);
@@ -155,6 +166,10 @@ const DashboardClient: React.FC = () => {
     setSelectedSuggestions(new Set());
     setViewMode('report');
     setGscData(gscDataPayload);
+    
+    // Create and store a new AbortController for this specific request
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
         const apiResponse = await fetch('/api/analyze', {
@@ -166,12 +181,21 @@ const DashboardClient: React.FC = () => {
             gscSiteUrl: gscSiteUrl,
             seozoomApiKey: seozoomApiKey,
             strategyOptions: strategyOptions
-          })
+          }),
+          signal: controller.signal // Pass the signal to the fetch request
         });
         
         if (!apiResponse.ok) {
-            const errorData = await apiResponse.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
-            throw new Error(errorData.details || `Server responded with status ${apiResponse.status}`);
+            let errorDetails = `Server responded with status ${apiResponse.status}.`;
+            try {
+                // Try to get more specific error details from the response
+                const errorData = await apiResponse.json();
+                errorDetails = errorData.details || errorData.error || errorDetails;
+            } catch (e) {
+                // If the response is not JSON (e.g., HTML error page from timeout), read it as text.
+                errorDetails = await apiResponse.text();
+            }
+            throw new Error(errorDetails);
         }
         
         const responseData: Report = await apiResponse.json();
@@ -186,9 +210,15 @@ const DashboardClient: React.FC = () => {
             setSelectedDeepAnalysisUrl(sortedPages[0].url);
         }
     } catch (err) {
-        setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
+        if (err instanceof Error && err.name === 'AbortError') {
+            console.log('Analysis request was aborted.');
+            setError("L'analisi è stata annullata.");
+        } else {
+            setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
+        }
     } finally {
         setIsLoading(false);
+        abortControllerRef.current = null; // Clean up the controller
     }
   }, [setSite, setSavedReport]);
 
