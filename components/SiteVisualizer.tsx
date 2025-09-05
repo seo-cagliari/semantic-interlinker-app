@@ -26,7 +26,8 @@ interface SiteVisualizerProps {
     report: Report;
 }
 
-export const SiteVisualizer = ({ report }: SiteVisualizerProps) => {
+export const SiteVisualizer = (props: SiteVisualizerProps) => {
+    const { report } = props;
     const fgRef = useRef<ForceGraphMethods<MyNode, LinkObject>>(null);
 
     const [highlightedNode, setHighlightedNode] = useState<MyNode | null>(null);

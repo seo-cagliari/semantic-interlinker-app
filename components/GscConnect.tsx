@@ -15,7 +15,8 @@ interface GscConnectProps {
 
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
 
-export const GscConnect = ({ onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError }: GscConnectProps) => {
+export const GscConnect = (props: GscConnectProps) => {
+  const { onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError } = props;
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');

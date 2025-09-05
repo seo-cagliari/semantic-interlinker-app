@@ -25,7 +25,8 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default function RootLayout(props: RootLayoutProps) {
+  const { children } = props;
   return (
     <html lang="it" className={`${inter.variable} ${sourceCodePro.variable}`}>
       <body>{children}</body>

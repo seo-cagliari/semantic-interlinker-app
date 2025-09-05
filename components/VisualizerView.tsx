@@ -15,7 +15,8 @@ interface VisualizerViewProps {
   report: Report;
 }
 
-const VisualizerView = ({ report }: VisualizerViewProps) => {
+const VisualizerView = (props: VisualizerViewProps) => {
+  const { report } = props;
   return <SiteVisualizer report={report} />;
 };
 

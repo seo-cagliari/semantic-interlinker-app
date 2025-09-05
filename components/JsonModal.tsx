@@ -7,7 +7,8 @@ interface JsonModalProps {
   jsonString: string;
 }
 
-export const JsonModal = ({ isOpen, onClose, jsonString }: JsonModalProps) => {
+export const JsonModal = (props: JsonModalProps) => {
+  const { isOpen, onClose, jsonString } = props;
   if (!isOpen) return null;
 
   return (

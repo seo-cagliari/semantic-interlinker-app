@@ -23,21 +23,23 @@ interface ReportViewProps {
   deepAnalysisReport: DeepAnalysisReport | null;
 }
 
-const ReportView = ({
-  report,
-  sortedPages,
-  onAnalyzeFromHub,
-  selectedSuggestions,
-  onViewJson,
-  onViewModification,
-  onToggleSelection,
-  selectedDeepAnalysisUrl,
-  onSetSelectedDeepAnalysisUrl,
-  onDeepAnalysis,
-  isDeepLoading,
-  deepError,
-  deepAnalysisReport,
-}: ReportViewProps) => {
+const ReportView = (props: ReportViewProps) => {
+  const {
+    report,
+    sortedPages,
+    onAnalyzeFromHub,
+    selectedSuggestions,
+    onViewJson,
+    onViewModification,
+    onToggleSelection,
+    selectedDeepAnalysisUrl,
+    onSetSelectedDeepAnalysisUrl,
+    onDeepAnalysis,
+    isDeepLoading,
+    deepError,
+    deepAnalysisReport,
+  } = props;
+  
   return (
     <>
       {report.opportunity_hub && report.opportunity_hub.length > 0 && (

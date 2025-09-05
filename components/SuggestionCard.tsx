@@ -14,27 +14,30 @@ interface CannibalizationTooltipProps {
     details: NonNullable<Suggestion['risk_checks']['cannibalization_details']>;
 }
 
-const CannibalizationTooltip = ({ details }: CannibalizationTooltipProps) => (
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 md:w-80 p-3 rounded-lg shadow-xl bg-slate-800 text-white text-xs z-20 
-                   opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 pointer-events-none">
-        <div className="font-bold mb-2 border-b border-slate-600 pb-1">Diagnosi Cannibalizzazione</div>
-        
-        <div className="mb-2">
-            <h4 className="font-semibold text-slate-300">Query Contese:</h4>
-            <ul className="list-disc list-inside space-y-0.5">
-                {(details.competing_queries || []).map((q, i) => <li key={i}><span className="text-amber-300">"{q}"</span></li>)}
-            </ul>
-        </div>
+const CannibalizationTooltip = (props: CannibalizationTooltipProps) => {
+    const { details } = props;
+    return (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 md:w-80 p-3 rounded-lg shadow-xl bg-slate-800 text-white text-xs z-20 
+                    opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 pointer-events-none">
+            <div className="font-bold mb-2 border-b border-slate-600 pb-1">Diagnosi Cannibalizzazione</div>
+            
+            <div className="mb-2">
+                <h4 className="font-semibold text-slate-300">Query Contese:</h4>
+                <ul className="list-disc list-inside space-y-0.5">
+                    {(details.competing_queries || []).map((q, i) => <li key={i}><span className="text-amber-300">"{q}"</span></li>)}
+                </ul>
+            </div>
 
-        <div>
-            <h4 className="font-semibold text-slate-300">Consigli dell'AI:</h4>
-            <ul className="list-disc list-inside space-y-0.5">
-                 {(details.remediation_steps || []).map((s, i) => <li key={i}>{s}</li>)}
-            </ul>
+            <div>
+                <h4 className="font-semibold text-slate-300">Consigli dell'AI:</h4>
+                <ul className="list-disc list-inside space-y-0.5">
+                    {(details.remediation_steps || []).map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+            </div>
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-slate-800 rotate-45"></div>
         </div>
-         <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-slate-800 rotate-45"></div>
-    </div>
-);
+    );
+};
 
 interface RiskCheckItemProps {
     label: string;
@@ -43,7 +46,8 @@ interface RiskCheckItemProps {
     children?: React.ReactNode;
 }
 
-const RiskCheckItem = ({ label, value, isWarning = false, children }: RiskCheckItemProps) => {
+const RiskCheckItem = (props: RiskCheckItemProps) => {
+    const { label, value, isWarning = false, children } = props;
     const Icon = value ? (isWarning ? ExclamationTriangleIcon : CheckCircleIcon) : CheckCircleIcon;
     const colorClass = value ? (isWarning ? 'text-yellow-600' : 'text-green-600') : 'text-green-600';
     const text = value ? (isWarning ? 'Rilevato' : 'Sì') : 'No';
@@ -59,7 +63,8 @@ const RiskCheckItem = ({ label, value, isWarning = false, children }: RiskCheckI
 };
 
 
-export const SuggestionCard = ({ suggestion, isSelected, onViewJson, onViewModification, onToggleSelection }: SuggestionCardProps) => {
+export const SuggestionCard = (props: SuggestionCardProps) => {
+  const { suggestion, isSelected, onViewJson, onViewModification, onToggleSelection } = props;
   const { 
     source_url, 
     target_url, 

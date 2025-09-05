@@ -10,7 +10,8 @@ interface PriorityIndicatorProps {
     priority: ActionStep['priority'];
 }
 
-const PriorityIndicator = ({ priority }: PriorityIndicatorProps) => {
+const PriorityIndicator = (props: PriorityIndicatorProps) => {
+    const { priority } = props;
     const priorityMap = {
         'Alta': {
             icon: <div className="w-2 h-2 rounded-full bg-red-500"></div>,
@@ -39,7 +40,8 @@ const PriorityIndicator = ({ priority }: PriorityIndicatorProps) => {
 };
 
 
-export const DeepAnalysisReportDisplay = ({ report }: DeepAnalysisReportDisplayProps) => {
+export const DeepAnalysisReportDisplay = (props: DeepAnalysisReportDisplayProps) => {
+  const { report } = props;
   const score = report.authority_score;
   const scoreColorClass = score > 7 ? 'text-green-700 bg-green-100 border-green-200' : score > 4 ? 'text-yellow-700 bg-yellow-100 border-yellow-200' : 'text-slate-700 bg-slate-100 border-slate-200';
 

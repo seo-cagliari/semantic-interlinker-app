@@ -13,15 +13,19 @@ interface MetricProps {
     colorClass?: string;
 }
 
-const Metric = ({ icon, label, value, colorClass = 'text-slate-700' }: MetricProps) => (
-    <div className="flex items-center gap-2">
-      {icon}
-      <span className="text-xs text-slate-500">{label}:</span>
-      <span className={`text-xs font-bold ${colorClass}`}>{value}</span>
-    </div>
-);
+const Metric = (props: MetricProps) => {
+    const { icon, label, value, colorClass = 'text-slate-700' } = props;
+    return (
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs text-slate-500">{label}:</span>
+          <span className={`text-xs font-bold ${colorClass}`}>{value}</span>
+        </div>
+    );
+};
 
-export const ContentGapAnalysis = ({ suggestions }: ContentGapAnalysisProps) => {
+export const ContentGapAnalysis = (props: ContentGapAnalysisProps) => {
+  const { suggestions } = props;
   return (
     <div className="mt-16">
       <div className="flex items-center gap-3 mb-4">

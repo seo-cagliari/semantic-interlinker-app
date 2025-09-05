@@ -14,7 +14,8 @@ interface MetricChangeProps {
     positiveIsGood: boolean;
 }
 
-const MetricChange = ({ value, unit, positiveIsGood }: MetricChangeProps) => {
+const MetricChange = (props: MetricChangeProps) => {
+    const { value, unit, positiveIsGood } = props;
     const isPositive = value > 0;
     const isNegative = value < 0;
     const isNeutral = Math.abs(value) < 0.01;
@@ -38,7 +39,8 @@ const MetricChange = ({ value, unit, positiveIsGood }: MetricChangeProps) => {
 };
 
 
-export const ProgressReportModal = ({ isOpen, onClose, report }: ProgressReportModalProps) => {
+export const ProgressReportModal = (props: ProgressReportModalProps) => {
+  const { isOpen, onClose, report } = props;
   if (!isOpen) return null;
 
   return (

@@ -7,7 +7,8 @@ interface OpportunityHubProps {
   onAnalyze: (url: string) => void;
 }
 
-export const OpportunityHub = ({ pages, onAnalyze }: OpportunityHubProps) => {
+export const OpportunityHub = (props: OpportunityHubProps) => {
+  const { pages, onAnalyze } = props;
   return (
     <div className="mb-16">
       <div className="flex items-center gap-3 mb-4">
