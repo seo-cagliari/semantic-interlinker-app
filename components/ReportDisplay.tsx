@@ -59,10 +59,9 @@ const ReportDisplay: React.FC<ReportDisplayProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   const pageDiagnostics = report?.page_diagnostics || [];
-  const sortedPageDiagnostics = useMemo(() => {
-    // Create a new array to sort, preventing mutation of the original prop
-    return [...pageDiagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
-  }, [pageDiagnostics]);
+  // Rimosso useMemo per risolvere un problema di compilazione di Next.js (SWC).
+  // L'array viene ora ordinato direttamente. Il costo di performance è trascurabile in questo contesto.
+  const sortedPageDiagnostics = [...pageDiagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
 
   return (
     <div className="animate-fade-in-up">
