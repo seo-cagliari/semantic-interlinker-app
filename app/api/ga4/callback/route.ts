@@ -68,17 +68,17 @@ export async function GET(req: NextRequest) {
     redirectUri = decodedState.redirectUri;
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : "Errore sconosciuto durante la decodifica dello state.";
-    console.error('OAuth State Error:', errorMessage);
-    return renderErrorPage('Errore di Sicurezza', `Verifica dello stato di OAuth fallita. La richiesta non può essere considerata attendibile. Dettagli: <code>${errorMessage}</code>`);
+    console.error('OAuth State Error (GA4):', errorMessage);
+    return renderErrorPage('Errore di Sicurezza (GA4)', `Verifica dello stato di OAuth fallita. La richiesta non può essere considerata attendibile. Dettagli: <code>${errorMessage}</code>`);
   }
 
   if (error) {
-    console.error('Google OAuth Error:', error);
-    return renderErrorPage('Errore di Autenticazione', `Google ha restituito un errore: <code>${error}</code>`);
+    console.error('Google OAuth Error (GA4):', error);
+    return renderErrorPage('Errore di Autenticazione (GA4)', `Google ha restituito un errore: <code>${error}</code>`);
   }
   
   if (!code) {
-    return renderErrorPage('Errore di Autenticazione', 'Il codice di autorizzazione di Google non è stato trovato nella richiesta.');
+    return renderErrorPage('Errore di Autenticazione (GA4)', 'Il codice di autorizzazione di Google non è stato trovato nella richiesta.');
   }
   
   const missingVars = [];
@@ -87,8 +87,8 @@ export async function GET(req: NextRequest) {
 
   if (missingVars.length > 0) {
     const errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
-    console.error('Callback Error:', errorMessage);
-    return renderErrorPage('Errore di Configurazione del Server', errorMessage);
+    console.error('Callback Error (GA4):', errorMessage);
+    return renderErrorPage('Errore di Configurazione del Server (GA4)', errorMessage);
   }
 
   try {
