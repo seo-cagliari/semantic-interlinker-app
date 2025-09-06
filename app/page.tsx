@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -110,7 +109,7 @@ const LandingPage = () => {
                 &copy; {new Date().getFullYear()} Semantic-Interlinker-25. Un progetto di SEO Cagliari.
             </p>
              <p className="text-xs text-slate-400 mt-2">
-                <a href="#privacy" className="hover:underline">Privacy Policy</a> &middot; <a href="#terms" className="hover:underline">Termini di Servizio</a>
+                <Link href="/privacy" className="hover:underline">Privacy Policy</Link> &middot; <Link href="/terms" className="hover:underline">Termini di Servizio</Link>
             </p>
         </footer>
       </div>
