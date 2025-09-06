@@ -1,6 +1,6 @@
-
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
+import { Buffer } from 'buffer';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +18,10 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const redirectUri = `${url.origin}/api/ga4/callback`;
+
+    // **Stateful Handshake Implementation**
+    const state = { redirectUri };
+    const encodedState = Buffer.from(JSON.stringify(state)).toString('base64');
     
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -33,6 +37,7 @@ export async function GET(req: NextRequest) {
       access_type: 'offline',
       scope: scopes,
       include_granted_scopes: true,
+      state: encodedState,
     });
     
     return NextResponse.redirect(authorizationUrl);

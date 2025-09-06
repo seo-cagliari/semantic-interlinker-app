@@ -1,15 +1,25 @@
-
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
+import { Buffer } from 'buffer';
 
 export const dynamic = 'force-dynamic';
 
-const renderErrorPage = (title: string, message: string, rawError?: any) => {
-  const rawErrorHtml = rawError && Object.keys(rawError).length > 0
-    ? `<h3>Dati di Errore Grezzi da Google</h3>
+const renderErrorPage = (title: string, message: string, rawError?: any, redirectUri?: string) => {
+  let specificDiagnosis = '';
+
+  if (rawError?.error === 'redirect_uri_mismatch' && redirectUri) {
+     specificDiagnosis = `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
+                    <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
+                    <p><b>AZIONE RICHIESTA:</b></p>
+                    <ul>
+                        <li><b>URI garantito inviato da questa applicazione (verificato tramite 'state'):</b> <code>${redirectUri}</code></li>
+                        <li>Copia il valore qui sopra e assicurati che sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
+                    </ul>`;
+  } else if (rawError && Object.keys(rawError).length > 0) {
+    specificDiagnosis = `<h3>Dati di Errore Grezzi da Google</h3>
        <p>Questa è la risposta esatta ricevuta dal server di Google, senza filtri. La vera causa dell'errore si trova qui.</p>
-       <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>` 
-    : '';
+       <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>`;
+  }
 
   return new Response(
     `<!DOCTYPE html>
@@ -33,7 +43,7 @@ const renderErrorPage = (title: string, message: string, rawError?: any) => {
       <div class="container">
         <h1><span style="font-size: 1.5rem;">🚨</span> ${title}</h1>
         <div>${message}</div>
-        ${rawErrorHtml}
+        ${specificDiagnosis}
       </div>
     </body>
     </html>`,
@@ -48,6 +58,19 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const state = searchParams.get('state');
+
+  let redirectUri: string;
+  try {
+    if (!state) throw new Error("Il parametro 'state' di OAuth è mancante. Impossibile verificare la richiesta.");
+    const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
+    if (!decodedState.redirectUri) throw new Error("Lo 'state' di OAuth non contiene il redirectUri richiesto.");
+    redirectUri = decodedState.redirectUri;
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Errore sconosciuto durante la decodifica dello state.";
+    console.error('OAuth State Error:', errorMessage);
+    return renderErrorPage('Errore di Sicurezza', `Verifica dello stato di OAuth fallita. La richiesta non può essere considerata attendibile. Dettagli: <code>${errorMessage}</code>`);
+  }
 
   if (error) {
     console.error('Google OAuth Error:', error);
@@ -68,9 +91,6 @@ export async function GET(req: NextRequest) {
     return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
 
-  const url = new URL(req.url);
-  const redirectUri = `${url.origin}/api/gsc/callback`;
-
   try {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -81,8 +101,7 @@ export async function GET(req: NextRequest) {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    // Use NextResponse for robust redirection and cookie setting
-    const response = NextResponse.redirect(new URL('/dashboard', url.origin));
+    const response = NextResponse.redirect(new URL('/dashboard', req.url));
     
     response.cookies.set('gsc_token', JSON.stringify(tokens), {
       httpOnly: true,
@@ -98,38 +117,13 @@ export async function GET(req: NextRequest) {
     console.error('Raw error during Google Token exchange:', err);
     
     const errorResponse = err.response?.data || {};
-
-    let message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>
-                     <p>Questo di solito indica un problema di configurazione nel tuo progetto Google Cloud. Analizza la risposta grezza qui sotto per identificare la causa del problema.</p>`;
-
-    if (errorResponse.error === 'redirect_uri_mismatch') {
-        message += `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
-                    <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
-                    <p><b>VERIFICA QUESTI VALORI:</b></p>
-                    <ul>
-                        <li><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code></li>
-                        <li>Assicurati che questo esatto valore sia presente nell'elenco degli "URI di reindirizzamento autorizzati" per il tuo ID client OAuth 2.0. Controlla la presenza di <code>http</code> vs <code>https</code>, barre finali (<code>/</code>), e sottodomini (<code>www.</code>).</li>
-                    </ul>`;
-    } else if (errorResponse.error === 'invalid_client') {
-        message += `<h3>Diagnosi Specifica: code>invalid_client</code></h3>
-                    <p>L'autenticazione del client è fallita. Questo quasi sempre significa che il <b>Client Secret</b> non è corretto.</p>
-                    <p><b>AZIONE RICHIESTA:</b></p>
-                    <ul>
-                        <li>Vai alla tua <a href="https://console.cloud.google.com/apis/credentials" target="_blank">pagina delle credenziali di Google Cloud</a>.</li>
-                        <li>Verifica che la variabile d'ambiente <code>GOOGLE_CLIENT_SECRET</code> nel tuo hosting corrisponda esattamente al valore mostrato per il tuo ID client OAuth.</li>
-                        <li>Se hai rigenerato il secret di recente, assicurati di aver aggiornato la variabile d'ambiente.</li>
-                    </ul>`;
-    } else {
-       message += `<p><b>Altre cause comuni:</b></p>
-                     <ul>
-                        <li><b><code>invalid_grant</code>:</b> Il codice di autorizzazione (<code>code</code>) è scaduto o non valido. Prova a ricollegarti.</li>
-                     </ul>`;
-    }
+    const message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso.</p>`;
 
     return renderErrorPage(
-        'Errore di Autenticazione (Diagnosi Avanzata)', 
+        'Errore di Autenticazione GSC (Diagnosi Avanzata)', 
         message,
-        errorResponse
+        errorResponse,
+        redirectUri
     );
   }
 }

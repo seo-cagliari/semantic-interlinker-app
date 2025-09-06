@@ -1,10 +1,9 @@
-
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
+import { Buffer } from 'buffer';
 
 export const dynamic = 'force-dynamic';
 
-// This is the new, enhanced diagnostic page renderer.
 const renderErrorPage = (title: string, message: string, rawError?: any, redirectUri?: string) => {
   let specificDiagnosis = '';
   
@@ -14,7 +13,7 @@ const renderErrorPage = (title: string, message: string, rawError?: any, redirec
         <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento inviato dalla nostra applicazione non è presente nell'elenco degli URI autorizzati nella tua Google Cloud Console.</p>
         <p class="azione"><b>AZIONE RICHIESTA:</b></p>
         <ol>
-            <li>Copia il seguente URI. È l'indirizzo esatto che la nostra app sta usando in questo momento:</li>
+            <li>Copia il seguente URI. È l'indirizzo esatto e garantito che la nostra app sta usando in questo momento:</li>
             <li class="code-box"><code>${redirectUri}</code></li>
             <li>Vai alla tua <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">pagina delle credenziali di Google Cloud</a>.</li>
             <li>Seleziona il tuo progetto e clicca sul nome del tuo <b>ID client OAuth 2.0</b>.</li>
@@ -24,7 +23,7 @@ const renderErrorPage = (title: string, message: string, rawError?: any, redirec
         </ol>
         <p class="nota"><b>Nota:</b> Devi aggiungere questo URI per ogni ambiente che usi (es. localhost, produzione, URL di anteprima di Vercel).</p>
     `;
-  } else if (rawError?.error) {
+  } else if (rawError && Object.keys(rawError).length > 0) {
      specificDiagnosis = `<h3>Dati di Errore Grezzi da Google</h3>
        <p>Questa è la risposta esatta ricevuta dal server di Google. La causa dell'errore si trova qui.</p>
        <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>`;
@@ -63,17 +62,29 @@ const renderErrorPage = (title: string, message: string, rawError?: any, redirec
     </body>
     </html>`,
     {
-      status: 400, // Bad Request is more appropriate for config errors
+      status: 400,
       headers: { 'Content-Type': 'text/html' },
     }
   );
 };
 
 export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const code = url.searchParams.get('code');
-  const error = url.searchParams.get('error');
-  const redirectUri = `${url.origin}/api/ga4/callback`;
+  const { searchParams } = new URL(req.url);
+  const code = searchParams.get('code');
+  const error = searchParams.get('error');
+  const state = searchParams.get('state');
+
+  let redirectUri: string;
+  try {
+    if (!state) throw new Error("Il parametro 'state' di OAuth è mancante. Impossibile verificare la richiesta.");
+    const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
+    if (!decodedState.redirectUri) throw new Error("Lo 'state' di OAuth non contiene il redirectUri richiesto.");
+    redirectUri = decodedState.redirectUri;
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Errore sconosciuto durante la decodifica dello state.";
+    console.error('OAuth State Error (GA4):', errorMessage);
+    return renderErrorPage('Errore di Sicurezza GA4', `Verifica dello stato di OAuth fallita. La richiesta non può essere considerata attendibile. Dettagli: <code>${errorMessage}</code>`);
+  }
 
   if (error) {
     console.error('Google OAuth Error (GA4):', error);
@@ -98,13 +109,13 @@ export async function GET(req: NextRequest) {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri // The dynamically generated URI must be used here too
+      redirectUri
     );
 
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    const response = NextResponse.redirect(new URL('/dashboard', url.origin));
+    const response = NextResponse.redirect(new URL('/dashboard', req.url));
     
     response.cookies.set('ga4_token', JSON.stringify(tokens), {
       httpOnly: true,
@@ -126,7 +137,7 @@ export async function GET(req: NextRequest) {
         'Errore di Autenticazione GA4 (Configurazione Guidata)', 
         message,
         errorResponse,
-        redirectUri // Pass the URI to the renderer
+        redirectUri
     );
   }
 }
