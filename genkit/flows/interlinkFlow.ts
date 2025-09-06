@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -535,6 +535,79 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
       // Non bloccare l'intero report se solo questa fase fallisce
       options.sendEvent({ type: 'progress', message: `Agente 3 (Content Strategist) fallito. Procedo senza content gap. Errore: ${detailedError}` });
   }
+
+  // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST ---
+  options.sendEvent({ type: 'progress', message: "Agente 4: Lo Stratega di Topical Authority sta costruendo la tua roadmap..." });
+  let topicalAuthorityRoadmap: TopicalAuthorityRoadmap | undefined = undefined;
+  try {
+    const topicalAuthorityPrompt = `
+      Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority e SEO semantica, seguendo i principi di Koray Tuğberk Gürbüz.
+      
+      CONTESTO:
+      Stai analizzando il sito "${options.site_root}". La tua analisi ha già prodotto i seguenti cluster tematici, che rappresentano la conoscenza attuale del sito:
+      ${JSON.stringify(thematicClusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+      
+      IL TUO COMPITO:
+      Creare una "Topical Authority Roadmap" strategica per trasformare questo sito nella risorsa definitiva sul suo argomento principale.
+      
+      ISTRUZIONI:
+      1. SINTETIZZA L'ARGOMENTO PRINCIPALE: Basandoti sui cluster esistenti, identifica e dichiara il 'main_topic' del sito in una frase chiara.
+      2. VALUTA LA COPERTURA ATTUALE: Estrapola le entità e i concetti coperti dai cluster. Assegna un 'coverage_score' da 0 a 100 che rappresenti la completezza tematica attuale. Un punteggio alto (90+) significa che il sito copre quasi tutto. Un punteggio basso (<50) indica molte lacune.
+      3. IDENTIFICA I CLUSTER MANCANTI: Confronta la conoscenza attuale del sito con una mappa semantica ideale per il 'main_topic'. Identifica 2-4 cluster concettuali di alto livello che sono completamente assenti o trattati in modo superficiale.
+      4. GENERA SUGGERIMENTI DI CONTENUTO: Per ogni cluster mancante, fornisci una 'strategic_rationale' (perché è importante) e suggerisci 2-3 titoli di articoli ('article_suggestions') specifici e pratici che potrebbero popolarlo, includendo le 'target_queries' per ogni articolo.
+      
+      OUTPUT:
+      La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
+    `;
+
+    const topicalAuthoritySchema = {
+      type: Type.OBJECT,
+      properties: {
+        main_topic: { type: Type.STRING },
+        coverage_score: { type: Type.NUMBER },
+        cluster_suggestions: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              cluster_name: { type: Type.STRING },
+              strategic_rationale: { type: Type.STRING },
+              article_suggestions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    target_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["title", "target_queries"]
+                }
+              }
+            },
+            required: ["cluster_name", "strategic_rationale", "article_suggestions"]
+          }
+        }
+      },
+      required: ["main_topic", "coverage_score", "cluster_suggestions"]
+    };
+
+    const topicalResponse = await generateContentWithRetry(ai, {
+      model: "gemini-2.5-flash",
+      contents: topicalAuthorityPrompt,
+      config: { responseMimeType: "application/json", responseSchema: topicalAuthoritySchema, seed: 42 },
+    }, 4, 1000, onRetryCallback);
+
+    const responseText = topicalResponse.text;
+    if (responseText) {
+      topicalAuthorityRoadmap = JSON.parse(responseText.trim());
+      options.sendEvent({ type: 'progress', message: `Agente 4 completo. Creata la roadmap per la Topical Authority.` });
+    }
+  } catch (e) {
+    console.error("Error during Topical Authority Analysis phase:", e);
+    const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+    options.sendEvent({ type: 'progress', message: `Agente 4 (Topical Authority Strategist) fallito. Procedo senza roadmap. Errore: ${detailedError}` });
+  }
+
   
   options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
 
@@ -547,6 +620,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     content_gap_suggestions: contentGapSuggestions,
     page_diagnostics: pageDiagnostics,
     opportunity_hub: opportunityHubData,
+    topical_authority_roadmap: topicalAuthorityRoadmap,
     internal_links_map: internalLinksMap,
     gscData: options.gscData,
     ga4Data: options.ga4Data,

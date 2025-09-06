@@ -3,13 +3,14 @@ import React, { useState } from 'react';
 import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
 import VisualizerView from './VisualizerView';
 import { ReportView } from './ReportView';
-import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon, LinkIcon, LightBulbIcon, BeakerIcon, LayoutDashboardIcon, XCircleIcon, BrainCircuitIcon } from './Icons';
+import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon, LinkIcon, LightBulbIcon, BeakerIcon, LayoutDashboardIcon, XCircleIcon, BrainCircuitIcon, MapIcon } from './Icons';
 import { Filters } from './SuggestionFilters';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/Tabs';
 import { OpportunityHub } from './OpportunityHub';
 import { ThematicClusters } from './ThematicClusters';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
+import { TopicalAuthorityRoadmap } from './TopicalAuthorityRoadmap';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -170,6 +171,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
             <TabsList>
                 <TabsTrigger value="summary" icon={<LayoutDashboardIcon className="w-5 h-5" />}>Riepilogo Strategico</TabsTrigger>
                 <TabsTrigger value="suggestions" icon={<LinkIcon className="w-5 h-5" />}>Suggerimenti di Link</TabsTrigger>
+                {report.topical_authority_roadmap && <TabsTrigger value="topical_authority" icon={<MapIcon className="w-5 h-5" />}>Topical Authority</TabsTrigger>}
                 <TabsTrigger value="content" icon={<LightBulbIcon className="w-5 h-5" />}>Analisi Contenuti</TabsTrigger>
                 <TabsTrigger value="deep-dive" icon={<BeakerIcon className="w-5 h-5" />}>Analisi Approfondita</TabsTrigger>
             </TabsList>
@@ -185,6 +187,12 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
             <TabsContent value="suggestions">
                 <ReportView {...props} />
             </TabsContent>
+
+            {report.topical_authority_roadmap && (
+              <TabsContent value="topical_authority">
+                <TopicalAuthorityRoadmap roadmap={report.topical_authority_roadmap} />
+              </TabsContent>
+            )}
 
             <TabsContent value="content">
                  {report.thematic_clusters && report.thematic_clusters.length > 0 ? (

@@ -63,6 +63,26 @@ export type ContentGapSuggestion = {
   search_intent?: string;
 };
 
+// --- Tipi per la Topical Authority Roadmap ---
+
+export type TopicalArticleSuggestion = {
+  title: string;
+  target_queries: string[];
+};
+
+export type TopicalClusterSuggestion = {
+  cluster_name: string;
+  strategic_rationale: string;
+  article_suggestions: TopicalArticleSuggestion[];
+};
+
+export type TopicalAuthorityRoadmap = {
+  main_topic: string;
+  coverage_score: number; // A score from 0 to 100
+  cluster_suggestions: TopicalClusterSuggestion[];
+};
+
+
 // --- Tipi per l'integrazione GSC ---
 export type GscSite = {
   siteUrl: string;
@@ -186,6 +206,7 @@ export type Report = {
   content_gap_suggestions: ContentGapSuggestion[];
   page_diagnostics: PageDiagnostic[];
   opportunity_hub?: OpportunityPage[];
+  topical_authority_roadmap?: TopicalAuthorityRoadmap;
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   gscData?: GscDataRow[];
   ga4Data?: Ga4DataRow[];
