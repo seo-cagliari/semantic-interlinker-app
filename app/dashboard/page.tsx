@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport } from '../../types';
 import { JsonModal } from '../../components/JsonModal';
 import { ModificationModal } from '../../components/ModificationModal';
-import { GscConnect } from '../../components/GscConnect';
 import { BrainCircuitIcon, LoadingSpinnerIcon, XCircleIcon } from '../../components/Icons';
 import { ProgressReportModal } from '../../components/ProgressReportModal';
 import { ReportDisplay } from '../../components/ReportDisplay';
@@ -21,6 +21,19 @@ const loadingMessages = [
   "Ricerca di 'content gap' e nuove opportunità editoriali...",
   "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
 ];
+
+const GscConnect = dynamic(
+  () => import('../../components/GscConnect').then(mod => mod.GscConnect),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-center py-12">
+        <LoadingSpinnerIcon className="w-8 h-8 mx-auto text-slate-400" />
+        <p className="mt-2 text-slate-500">Caricamento interfaccia GSC...</p>
+      </div>
+    ),
+  }
+);
 
 
 const LoadingSkeleton = () => (
