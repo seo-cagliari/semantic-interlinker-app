@@ -55,8 +55,18 @@ export default function DashboardClient() {
   
   // --- HYDRATION & PERSISTENCE EFFECTS ---
 
-  // This single effect handles the safe hydration from localStorage on the client.
+  // Hydration Guard Effect: This effect runs only once on the client after the initial render.
+  // It flips the `isHydrated` flag, allowing subsequent renders to safely access browser-only APIs like localStorage.
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // This effect now safely reads from localStorage because it will only run *after* `isHydrated` is true,
+  // preventing a mismatch with the server render.
+  useEffect(() => {
+    if (!isHydrated) {
+      return; // Do nothing until the component is hydrated.
+    }
     try {
       const storedSite = window.localStorage.getItem('semantic-interlinker-site');
       const initialSite = storedSite ? JSON.parse(storedSite) : null;
@@ -70,14 +80,10 @@ export default function DashboardClient() {
       }
     } catch (e) {
       console.error("Failed to hydrate state from localStorage:", e);
-      // Ensure state is clean if localStorage is corrupt
       setSite(null);
       setSavedReport(null);
-    } finally {
-      // Mark hydration as complete, allowing the full UI to render.
-      setIsHydrated(true);
     }
-  }, []); // Empty array ensures this runs only once on client mount.
+  }, [isHydrated]);
   
   // Persist site to localStorage when it changes, only after initial hydration
   useEffect(() => {
@@ -323,15 +329,14 @@ export default function DashboardClient() {
     });
   }, []);
 
-  // While waiting for the client-side hydration to finish, render the skeleton.
-  // This matches the skeleton rendered on the server via next/dynamic.
+  // HYDRATION GUARD: Render a static skeleton on the server and on the initial client render.
+  // This guarantees a match and prevents the hydration error.
   if (!isHydrated) {
     return (
        <div className="flex justify-center items-center py-20">
           <div className="text-center">
             <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <p className="text-slate-600 font-semibold">Caricamento dashboard interattiva...</p>
-            <p className="text-slate-500 text-sm mt-1">L'interfaccia è in fase di inizializzazione sul client.</p>
+            <p className="text-slate-600 font-semibold">Caricamento dashboard...</p>
           </div>
         </div>
     );
