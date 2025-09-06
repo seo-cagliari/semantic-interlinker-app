@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
       scope: scopes,
       include_granted_scopes: true,
       state: encodedState,
+      prompt: 'consent', // Force a clean consent screen every time
     });
     
     return NextResponse.redirect(authorizationUrl);
