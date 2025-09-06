@@ -11,6 +11,7 @@ import { seozoom } from '../tools/seozoom';
  * @param params The parameters for the generateContent call.
  * @param maxRetries The maximum number of retry attempts.
  * @param initialDelay The initial delay in milliseconds for the backoff.
+ * @param onRetry A callback function to send progress updates during retry waits.
  * @returns The GenerateContentResponse on success.
  * @throws The last caught error if all retries fail.
  */
@@ -18,7 +19,8 @@ async function generateContentWithRetry(
   ai: GoogleGenAI,
   params: { model: string; contents: any; config: any },
   maxRetries = 4,
-  initialDelay = 1000 // 1 second
+  initialDelay = 1000, // 1 second
+  onRetry?: (attempt: number, delay: number) => void
 ): Promise<GenerateContentResponse> {
   let lastError: any;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -34,6 +36,9 @@ async function generateContentWithRetry(
         if (attempt < maxRetries - 1) {
           const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 1000; // Exponential backoff with jitter
           console.warn(`Attempt ${attempt + 1} failed with transient error. Retrying in ${Math.round(delay / 1000)}s...`);
+          if (onRetry) {
+            onRetry(attempt + 1, delay);
+          }
           await new Promise(resolve => setTimeout(resolve, delay));
         } else {
            console.error(`Final attempt failed. Error: ${errorMessage}`);
@@ -53,11 +58,13 @@ async function generateContentWithRetry(
  * Calcola un punteggio di autorità interna (stile PageRank) per ogni pagina.
  * @param linkMap Mappa di link: { sourceUrl: [targetUrl1, targetUrl2] }
  * @param pages Elenco di tutte le pagine con URL e titolo.
+ * @param onProgress Callback per riportare lo stato di avanzamento delle iterazioni.
  * @returns Un elenco di pagine con il loro punteggio di autorità calcolato e normalizzato.
  */
 function calculateInternalAuthority(
     linkMap: Record<string, string[]>,
-    pages: { url: string; title: string }[]
+    pages: { url: string; title: string }[],
+    onProgress?: (current: number, total: number) => void
 ): { url: string; title: string; score: number }[] {
     const DAMPING_FACTOR = 0.85;
     const ITERATIONS = 20;
@@ -95,6 +102,9 @@ function calculateInternalAuthority(
             newScores[j] = (1 - DAMPING_FACTOR) + DAMPING_FACTOR * sum;
         }
         scores = newScores;
+        if (onProgress) {
+            onProgress(i + 1, ITERATIONS);
+        }
     }
 
     const maxScore = Math.max(...scores);
@@ -211,7 +221,10 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   options.sendEvent({ type: 'progress', message: `Calcolo Punteggi di Autorità Interna...` });
   const pagesWithScores = calculateInternalAuthority(
       internalLinksMap,
-      allPagesWithContent.map(p => ({ url: p.link, title: p.title }))
+      allPagesWithContent.map(p => ({ url: p.link, title: p.title })),
+      (current, total) => {
+        options.sendEvent({ type: 'progress', message: `Calcolo Autorità: iterazione ${current} di ${total}...` });
+      }
   );
   
   const pageDiagnostics: PageDiagnostic[] = pagesWithScores.map(p => ({
@@ -228,6 +241,12 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   if (allSiteUrls.length === 0) {
     throw new Error("Could not find any published posts or pages on the specified WordPress site.");
   }
+
+  // --- COMMON CALLBACK FOR GEMINI RETRIES ---
+  const onRetryCallback = (attempt: number, delay: number) => {
+    options.sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
+  };
+
 
   // --- AGENT 1: INFORMATION ARCHITECT ---
   options.sendEvent({ type: 'progress', message: "Agente 1: L'Architetto dell'Informazione sta analizzando la struttura del sito..." });
@@ -271,7 +290,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
         model: "gemini-2.5-flash",
         contents: clusterPrompt,
         config: { responseMimeType: "application/json", responseSchema: clusterSchema, seed: 42 },
-    });
+    }, 4, 1000, onRetryCallback);
     const responseText = clusterResponse.text;
     if (!responseText) throw new Error("Received empty response during clustering.");
     thematicClusters = JSON.parse(responseText.trim()).thematic_clusters;
@@ -404,7 +423,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
         model: "gemini-2.5-flash",
         contents: suggestionPrompt,
         config: { responseMimeType: "application/json", responseSchema: suggestionSchema, seed: 42 },
-    });
+    }, 4, 1000, onRetryCallback);
     const responseText = suggestionResponse.text;
     if (responseText) {
         const parsedSuggestions = JSON.parse(responseText.trim()).suggestions;
@@ -477,7 +496,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
         model: "gemini-2.5-flash",
         contents: contentGapPrompt,
         config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
-    });
+    }, 4, 1000, onRetryCallback);
     const responseText = contentGapResponse.text;
     if (responseText) {
         const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
