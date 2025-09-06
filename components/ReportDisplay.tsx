@@ -32,12 +32,25 @@ interface ReportDisplayProps {
 
 const ReportDisplay = (props: ReportDisplayProps) => {
   const {
+    report,
+    sortedPages,
     savedReport,
     isProgressLoading,
     onProgressCheck,
     onNewAnalysis,
-    report,
+    onAnalyzeFromHub,
+    selectedSuggestions,
+    onViewJson,
+    onViewModification,
+    onToggleSelection,
+    selectedDeepAnalysisUrl,
+    onSetSelectedDeepAnalysisUrl,
+    onDeepAnalysis,
+    isDeepLoading,
+    deepError,
+    deepAnalysisReport,
   } = props;
+
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   return (
@@ -103,16 +116,16 @@ const ReportDisplay = (props: ReportDisplayProps) => {
 
       {viewMode === 'report' ? (
         <>
-            {props.report.opportunity_hub && props.report.opportunity_hub.length > 0 && (
-                <OpportunityHub pages={props.report.opportunity_hub} onAnalyze={props.onAnalyzeFromHub} />
+            {report.opportunity_hub && report.opportunity_hub.length > 0 && (
+                <OpportunityHub pages={report.opportunity_hub} onAnalyze={onAnalyzeFromHub} />
             )}
 
-            {props.report.thematic_clusters && props.report.thematic_clusters.length > 0 && (
-                <ThematicClusters clusters={props.report.thematic_clusters} />
+            {report.thematic_clusters && report.thematic_clusters.length > 0 && (
+                <ThematicClusters clusters={report.thematic_clusters} />
             )}
             
-            {props.report.content_gap_suggestions && props.report.content_gap_suggestions.length > 0 && (
-                <ContentGapAnalysis suggestions={props.report.content_gap_suggestions} />
+            {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
             )}
             
             <div className="flex items-center gap-3 mb-4 mt-16">
@@ -120,14 +133,14 @@ const ReportDisplay = (props: ReportDisplayProps) => {
                 <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
             </div>
             <div className="space-y-6">
-                {(props.report.suggestions || []).map((suggestion, index) => (
+                {(report.suggestions || []).map((suggestion, index) => (
                 <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
                     <SuggestionCard
                     suggestion={suggestion}
-                    isSelected={props.selectedSuggestions.has(suggestion.suggestion_id)}
-                    onViewJson={props.onViewJson}
-                    onViewModification={props.onViewModification}
-                    onToggleSelection={props.onToggleSelection}
+                    isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
+                    onViewJson={onViewJson}
+                    onViewModification={onViewModification}
+                    onToggleSelection={onToggleSelection}
                     />
                 </div>
                 ))}
@@ -141,11 +154,11 @@ const ReportDisplay = (props: ReportDisplayProps) => {
                     <div className="md:col-span-2">
                     <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
                     <select
-                        value={props.selectedDeepAnalysisUrl}
-                        onChange={(e) => props.onSetSelectedDeepAnalysisUrl(e.target.value)}
+                        value={selectedDeepAnalysisUrl}
+                        onChange={(e) => onSetSelectedDeepAnalysisUrl(e.target.value)}
                         className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
                     >
-                        {props.sortedPages.map(page => (
+                        {sortedPages.map(page => (
                         <option key={page.url} value={page.url}>
                             [{page.internal_authority_score.toFixed(1)}] - {page.title}
                         </option>
@@ -154,25 +167,25 @@ const ReportDisplay = (props: ReportDisplayProps) => {
                     </div>
                     <div>
                     <button
-                        onClick={() => props.onDeepAnalysis()}
-                        disabled={props.isDeepLoading}
+                        onClick={onDeepAnalysis}
+                        disabled={isDeepLoading}
                         className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
                     >
-                        {props.isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                        {isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
                         Analisi Dettagliata
                     </button>
                     </div>
                 </div>
-                {props.deepError &&
+                {deepError &&
                     <div className="mt-4 flex items-center gap-2 text-red-600">
                     <XCircleIcon className="w-5 h-5" />
-                    <p className="text-sm">{props.deepError}</p>
+                    <p className="text-sm">{deepError}</p>
                     </div>
                 }
                 </div>
             </div>
 
-            {props.isDeepLoading && !props.deepAnalysisReport && (
+            {isDeepLoading && !deepAnalysisReport && (
                 <div className="text-center py-12 flex flex-col items-center">
                 <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
                 <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h2>
@@ -180,7 +193,7 @@ const ReportDisplay = (props: ReportDisplayProps) => {
                 </div>
             )}
 
-            {props.deepAnalysisReport && <DeepAnalysisReportDisplay report={props.deepAnalysisReport} />}
+            {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
         </>
       ) : (
         <VisualizerView report={report} />
