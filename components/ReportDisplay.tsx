@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
-import ReportView from './ReportView';
 import VisualizerView from './VisualizerView';
-import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon } from './Icons';
+import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon, BrainCircuitIcon, LinkIcon, XCircleIcon } from './Icons';
+import { SuggestionCard } from './SuggestionCard';
+import { ContentGapAnalysis } from './ContentGapAnalysis';
+import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
+import { OpportunityHub } from './OpportunityHub';
+import { ThematicClusters } from './ThematicClusters';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -98,21 +102,86 @@ const ReportDisplay = (props: ReportDisplayProps) => {
       </div>
 
       {viewMode === 'report' ? (
-        <ReportView
-          report={props.report}
-          sortedPages={props.sortedPages}
-          onAnalyzeFromHub={props.onAnalyzeFromHub}
-          selectedSuggestions={props.selectedSuggestions}
-          onViewJson={props.onViewJson}
-          onViewModification={props.onViewModification}
-          onToggleSelection={props.onToggleSelection}
-          selectedDeepAnalysisUrl={props.selectedDeepAnalysisUrl}
-          onSetSelectedDeepAnalysisUrl={props.onSetSelectedDeepAnalysisUrl}
-          onDeepAnalysis={props.onDeepAnalysis}
-          isDeepLoading={props.isDeepLoading}
-          deepError={props.deepError}
-          deepAnalysisReport={props.deepAnalysisReport}
-        />
+        <>
+            {props.report.opportunity_hub && props.report.opportunity_hub.length > 0 && (
+                <OpportunityHub pages={props.report.opportunity_hub} onAnalyze={props.onAnalyzeFromHub} />
+            )}
+
+            {props.report.thematic_clusters && props.report.thematic_clusters.length > 0 && (
+                <ThematicClusters clusters={props.report.thematic_clusters} />
+            )}
+            
+            {props.report.content_gap_suggestions && props.report.content_gap_suggestions.length > 0 && (
+                <ContentGapAnalysis suggestions={props.report.content_gap_suggestions} />
+            )}
+            
+            <div className="flex items-center gap-3 mb-4 mt-16">
+                <LinkIcon className="w-8 h-8 text-slate-500" />
+                <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento (Globali)</h2>
+            </div>
+            <div className="space-y-6">
+                {(props.report.suggestions || []).map((suggestion, index) => (
+                <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                    <SuggestionCard
+                    suggestion={suggestion}
+                    isSelected={props.selectedSuggestions.has(suggestion.suggestion_id)}
+                    onViewJson={props.onViewJson}
+                    onViewModification={props.onViewModification}
+                    onToggleSelection={props.onToggleSelection}
+                    />
+                </div>
+                ))}
+            </div>
+
+            <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>
+                <p className="text-slate-600 mb-4">Seleziona una pagina per un'analisi dettagliata basata sui dati GSC già caricati.</p>
+                <div className="bg-white p-4 rounded-lg border border-slate-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="md:col-span-2">
+                    <label className="text-sm font-semibold text-slate-600 block mb-1">Pagina da Analizzare</label>
+                    <select
+                        value={props.selectedDeepAnalysisUrl}
+                        onChange={(e) => props.onSetSelectedDeepAnalysisUrl(e.target.value)}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
+                    >
+                        {props.sortedPages.map(page => (
+                        <option key={page.url} value={page.url}>
+                            [{page.internal_authority_score.toFixed(1)}] - {page.title}
+                        </option>
+                        ))}
+                    </select>
+                    </div>
+                    <div>
+                    <button
+                        onClick={() => props.onDeepAnalysis()}
+                        disabled={props.isDeepLoading}
+                        className="w-full bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors disabled:bg-slate-400 flex items-center justify-center gap-2"
+                    >
+                        {props.isDeepLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <BrainCircuitIcon className="w-5 h-5" />}
+                        Analisi Dettagliata
+                    </button>
+                    </div>
+                </div>
+                {props.deepError &&
+                    <div className="mt-4 flex items-center gap-2 text-red-600">
+                    <XCircleIcon className="w-5 h-5" />
+                    <p className="text-sm">{props.deepError}</p>
+                    </div>
+                }
+                </div>
+            </div>
+
+            {props.isDeepLoading && !props.deepAnalysisReport && (
+                <div className="text-center py-12 flex flex-col items-center">
+                <LoadingSpinnerIcon className="w-12 h-12 text-slate-600 mb-4"/>
+                <h3 className="text-lg font-semibold mb-2">Analisi approfondita in corso...</h2>
+                <p className="text-slate-500 max-w-md">L'agente AI sta leggendo il contenuto e analizzando i dati GSC per generare suggerimenti strategici.</p>
+                </div>
+            )}
+
+            {props.deepAnalysisReport && <DeepAnalysisReportDisplay report={props.deepAnalysisReport} />}
+        </>
       ) : (
         <VisualizerView report={report} />
       )}
