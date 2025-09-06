@@ -22,11 +22,14 @@ const loadingMessages = [
   "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
 ];
 
+const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
+
 
 export default function DashboardClient() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
+  const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,17 +58,13 @@ export default function DashboardClient() {
   
   // --- HYDRATION & PERSISTENCE EFFECTS ---
 
-  // Hydration Guard Effect: This effect runs only once on the client after the initial render.
-  // It flips the `isHydrated` flag, allowing subsequent renders to safely access browser-only APIs like localStorage.
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
-  // This effect now safely reads from localStorage because it will only run *after* `isHydrated` is true,
-  // preventing a mismatch with the server render.
   useEffect(() => {
     if (!isHydrated) {
-      return; // Do nothing until the component is hydrated.
+      return;
     }
     try {
       const storedSite = window.localStorage.getItem('semantic-interlinker-site');
@@ -78,14 +77,18 @@ export default function DashboardClient() {
           const initialSavedReport = storedReportItem ? JSON.parse(storedReportItem) : null;
           setSavedReport(initialSavedReport);
       }
+
+      const savedKey = window.localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
+      setSeozoomApiKey(savedKey);
+
     } catch (e) {
       console.error("Failed to hydrate state from localStorage:", e);
       setSite(null);
       setSavedReport(null);
+      setSeozoomApiKey('');
     }
   }, [isHydrated]);
   
-  // Persist site to localStorage when it changes, only after initial hydration
   useEffect(() => {
     if (isHydrated) {
       try {
@@ -100,7 +103,6 @@ export default function DashboardClient() {
     }
   }, [site, isHydrated]);
   
-  // Persist report to localStorage when it changes, only after initial hydration
   useEffect(() => {
     if (isHydrated && site) {
       try {
@@ -115,6 +117,16 @@ export default function DashboardClient() {
       }
     }
   }, [savedReport, site, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+        try {
+            window.localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
+        } catch (e) {
+            console.error("Failed to persist SEOZoom API key to localStorage:", e);
+        }
+    }
+  }, [seozoomApiKey, isHydrated]);
   
   const report = useMemo(() => savedReport?.report ?? null, [savedReport]);
 
@@ -167,7 +179,7 @@ export default function DashboardClient() {
     };
   }, []);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] }) => {
+  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] }) => {
     setIsLoading(true);
     setError(null);
     setDeepAnalysisReport(null);
@@ -223,7 +235,7 @@ export default function DashboardClient() {
         setIsLoading(false);
         abortControllerRef.current = null;
     }
-  }, []);
+  }, [seozoomApiKey]);
 
   const handleDeepAnalysis = useCallback(async (urlToAnalyze?: string) => {
     const finalUrl = urlToAnalyze || selectedDeepAnalysisUrl;
@@ -329,8 +341,6 @@ export default function DashboardClient() {
     });
   }, []);
 
-  // HYDRATION GUARD: Render a static skeleton on the server and on the initial client render.
-  // This guarantees a match and prevents the hydration error.
   if (!isHydrated) {
     return (
        <div className="flex justify-center items-center py-20">
@@ -351,6 +361,8 @@ export default function DashboardClient() {
           onProgressCheck={handleProgressCheck}
           isProgressLoading={isProgressLoading}
           progressError={progressError}
+          seozoomApiKey={seozoomApiKey}
+          onSeozoomApiKeyChange={setSeozoomApiKey}
         />
       )}
 

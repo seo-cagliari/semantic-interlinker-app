@@ -8,38 +8,26 @@ type Strategy = 'global' | 'pillar' | 'money';
 type StrategyOptions = { strategy: Strategy; targetUrls: string[] };
 
 interface GscConnectProps {
-  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: StrategyOptions) => void;
+  onAnalysisStart: (siteUrl: string, gscData: GscDataRow[], gscSiteUrl: string, strategyOptions?: StrategyOptions) => void;
   savedReport: SavedReport | null;
   onProgressCheck: () => void;
   isProgressLoading: boolean;
   progressError?: string | null;
+  seozoomApiKey: string;
+  onSeozoomApiKeyChange: (key: string) => void;
 }
 
-const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
-
 export const GscConnect = (props: GscConnectProps) => {
-  const { onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError } = props;
+  const { onAnalysisStart, savedReport, onProgressCheck, isProgressLoading, progressError, seozoomApiKey, onSeozoomApiKeyChange } = props;
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [sites, setSites] = useState<GscSite[]>([]);
   const [selectedGscSite, setSelectedGscSite] = useState<string>('');
-  const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAnalysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const [strategy, setStrategy] = useState<Strategy>('global');
   const [strategyTargetUrl, setStrategyTargetUrl] = useState('');
-
-  useEffect(() => {
-    const savedKey = localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
-    setSeozoomApiKey(savedKey);
-  }, []);
-  
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
-    }
-  }, [seozoomApiKey]);
 
   const checkAuthStatus = useCallback(async () => {
     setError(null);
@@ -104,7 +92,7 @@ export const GscConnect = (props: GscConnectProps) => {
           targetUrls: strategy !== 'global' && strategyTargetUrl ? [strategyTargetUrl] : []
       };
 
-      onAnalysisStart(finalSiteUrl, data, selectedGscSite, seozoomApiKey, strategyOptions);
+      onAnalysisStart(finalSiteUrl, data, selectedGscSite, strategyOptions);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Si è verificato un errore imprevisto.');
@@ -229,7 +217,7 @@ export const GscConnect = (props: GscConnectProps) => {
                     type="password"
                     placeholder="Inserisci la tua chiave API SEOZoom"
                     value={seozoomApiKey}
-                    onChange={(e) => setSeozoomApiKey(e.target.value)}
+                    onChange={(e) => onSeozoomApiKeyChange(e.target.value)}
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white text-sm"
                   />
                   <p className="text-xs text-slate-400 mt-1">Fornendo la chiave arricchirai le opportunità di contenuto con dati di mercato.</p>
