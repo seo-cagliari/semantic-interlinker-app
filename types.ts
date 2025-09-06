@@ -1,3 +1,4 @@
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -74,6 +75,20 @@ export type GscDataRow = {
   impressions: number;
   ctr: number;
   position: number;
+};
+
+// --- Tipi per l'integrazione GA4 ---
+export type Ga4Property = {
+  name: string; // e.g., "properties/12345678"
+  displayName: string;
+};
+
+export type Ga4DataRow = {
+  pagePath: string;
+  sessions: number;
+  totalUsers: number;
+  engagementRate: number;
+  conversions: number;
 };
 
 // --- Tipi per l'Analisi Approfondita con il Sotto-Agente SEO ---
@@ -173,5 +188,6 @@ export type Report = {
   opportunity_hub?: OpportunityPage[];
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   gscData?: GscDataRow[];
+  ga4Data?: Ga4DataRow[];
   notes?: string;
 };

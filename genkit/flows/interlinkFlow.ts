@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -164,6 +165,7 @@ export async function interlinkFlow(options: {
   gscSiteUrl?: string;
   seozoomApiKey?: string;
   strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
+  ga4Data?: Ga4DataRow[];
   applyDraft: boolean;
 }): Promise<Report> {
   console.log("Master Agent started with options:", options);
@@ -179,6 +181,14 @@ ${options.gscData?.slice(0, 200).map(row => `"${row.keys[0]}", "${row.keys[1]}",
 ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} record)` : ''}
 `
       : "Non sono stati forniti dati da Google Search Console. Basa la tua analisi solo sulla struttura del sito.";
+  
+  const hasGa4Data = options.ga4Data && options.ga4Data.length > 0;
+  const ga4DataStringForPrompt = hasGa4Data
+    ? `Inoltre, hai accesso ai seguenti dati comportamentali da Google Analytics 4. Usali per valutare il valore strategico delle pagine.
+Formato: 'pagePath', 'sessions', 'engagementRate', 'conversions'
+${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}
+`
+    : "Non sono stati forniti dati da Google Analytics 4. Basa la tua analisi comportamentale solo sui dati GSC.";
 
 
   // PHASE 0: AUTHORITY & OPPORTUNITY CALCULATION
@@ -269,6 +279,9 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     2. Hai accesso ai dati di performance di Google Search Console:
     ${gscDataStringForPrompt}
 
+    3. Dati Comportamentali da Google Analytics 4:
+    ${ga4DataStringForPrompt}
+
     IL TUO COMPITO:
     Genera un elenco di 10 suggerimenti di link interni ad alto impatto, seguendo la strategia definita.
   `;
@@ -297,7 +310,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
   } else { // global
       suggestionPrompt += `
       MODALITÀ STRATEGICA: "Analisi Globale"
-      OBIETTIVO PRIMARIO: Identificare le migliori opportunità di linking in tutto il sito per migliorare il posizionamento generale.
+      OBIETTIVO PRIMARIO: Identificare le migliori opportunità di linking in tutto il sito per migliorare il posizionamento generale e gli obiettivi di business.
       ISTRUZIONI SPECIFICHE:
       - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR.
       - DAI PRIORITÀ AI LINK DATA-DRIVEN: I tuoi suggerimenti migliori dovrebbero aiutare le pagine a posizionarsi meglio per queste "query opportunità".
@@ -313,7 +326,10 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
          - 'competing_queries': un array con le 1-3 query principali per cui competono.
          - 'remediation_steps': un array con 1-2 consigli pratici per risolvere il problema (es. "Differenziare l'intento delle pagine", "Consolidare l'autorità sulla pagina target").
        - Se non c'è rischio, imposta 'potential_cannibalization' a false e lascia 'cannibalization_details' vuoto o nullo.
-    3. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
+    3. USA I DATI COMPORTAMENTALI: Sfrutta i dati GA4 per decisioni strategiche.
+       - Pagine con alto tasso di conversione o engagement sono preziose. Suggerisci link VERSO di esse per capitalizzare sul loro successo.
+       - Pagine con molto traffico ma basso engagement o poche conversioni sono 'punti deboli'. Suggerisci link DA esse verso pagine più performanti.
+    4. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
   `;
 
     const suggestionSchema = {
@@ -408,13 +424,17 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
 
     2. Dati di performance da Google Search Console:
     ${gscDataStringForPrompt}
+    
+    3. Dati Comportamentali da Google Analytics 4:
+    ${ga4DataStringForPrompt}
 
     IL TUO COMPITO:
     Identifica le lacune di contenuto strategiche.
 
     ISTRUZIONI STRATEGICHE:
     - ANALIZZA LE QUERY DEBOLI: Cerca nei dati GSC le query per cui il sito ha visibilità (impressioni) ma scarso engagement (basso CTR) o per le quali nessuna pagina risponde in modo soddisfacente.
-    - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli, per colmare le lacune di performance e aumentare l'autorità.
+    - ANALIZZA LE PERFORMANCE COMPORTAMENTALI: Usa i dati GA4 per identificare le pagine 'underperforming'. Se una pagina ha molte impressioni (da GSC) ma un basso tasso di engagement (da GA4), è un'opportunità di contenuto.
+    - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli o migliorino le pagine underperforming, per colmare le lacune di performance e aumentare l'autorità.
     - Per ogni suggerimento, identifica la principale "target_query" (query di ricerca) che il nuovo contenuto dovrebbe targettizzare.
     - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
   `;
@@ -494,6 +514,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
     opportunity_hub: opportunityHubData,
     internal_links_map: internalLinksMap,
     gscData: options.gscData,
+    ga4Data: options.ga4Data,
     summary: {
         pages_scanned: allSiteUrls.length,
         indexable_pages: allSiteUrls.length,

@@ -1,17 +1,19 @@
+
 import { interlinkFlow } from '../../../genkit/flows/interlinkFlow';
-import { GscDataRow } from '../../../types';
+import { GscDataRow, Ga4DataRow } from '../../../types';
 
 export const dynamic = 'force-dynamic'; // A convention for serverless functions to not be cached
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { site_root, gscData, gscSiteUrl, seozoomApiKey, strategyOptions } = body as { 
+    const { site_root, gscData, gscSiteUrl, seozoomApiKey, strategyOptions, ga4Data } = body as { 
       site_root: string, 
       gscData?: GscDataRow[], 
       gscSiteUrl?: string,
       seozoomApiKey?: string,
       strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
+      ga4Data?: Ga4DataRow[];
     };
 
     if (!site_root) {
@@ -24,6 +26,7 @@ export async function POST(req: Request) {
       gscSiteUrl,
       seozoomApiKey,
       strategyOptions,
+      ga4Data,
       applyDraft: false
     });
 

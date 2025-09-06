@@ -1,7 +1,8 @@
+
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -12,6 +13,7 @@ import { GscConnect } from './GscConnect';
 const loadingMessages = [
   "Avvio dell'analisi strategica...",
   "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
+  "Sto recuperando i dati comportamentali da Google Analytics 4...",
   "Calcolo dell'autorità interna e del potenziale di crescita per ogni pagina...",
   "Orchestrazione dell'agente AI 'Information Architect'...",
   "Raggruppamento delle pagine in cluster tematici per l'analisi...",
@@ -24,6 +26,13 @@ const loadingMessages = [
 
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
 
+interface AnalysisPayload {
+    siteUrl: string;
+    gscData: GscDataRow[];
+    gscSiteUrl: string;
+    ga4Data?: Ga4DataRow[];
+    strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
+}
 
 export default function DashboardClient() {
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
@@ -175,16 +184,16 @@ export default function DashboardClient() {
     };
   }, []);
 
-  const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] }) => {
+  const handleStartAnalysis = useCallback(async (payload: AnalysisPayload) => {
     setIsLoading(true);
     setError(null);
     setDeepAnalysisReport(null);
     setDeepError(null);
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
-    setGscData(gscDataPayload);
+    setGscData(payload.gscData);
     
-    setSite(siteUrl);
+    setSite(payload.siteUrl);
     setSavedReport(null);
 
     const controller = new AbortController();
@@ -195,11 +204,12 @@ export default function DashboardClient() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            site_root: siteUrl,
-            gscData: gscDataPayload,
-            gscSiteUrl: gscSiteUrl,
+            site_root: payload.siteUrl,
+            gscData: payload.gscData,
+            gscSiteUrl: payload.gscSiteUrl,
+            ga4Data: payload.ga4Data,
             seozoomApiKey: seozoomApiKey,
-            strategyOptions: strategyOptions
+            strategyOptions: payload.strategyOptions
           }),
           signal: controller.signal
         });
@@ -394,7 +404,6 @@ export default function DashboardClient() {
           selectedSuggestions={selectedSuggestions}
           onViewJson={handleViewJson}
           onViewModification={handleViewModification}
-          // FIX: Corrected typo from onToggleSelection to handleToggleSelection
           onToggleSelection={handleToggleSelection}
           selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
           onSetSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
