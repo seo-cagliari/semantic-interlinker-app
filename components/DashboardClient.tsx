@@ -26,7 +26,7 @@ const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
 
 
 export default function DashboardClient() {
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
   const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
@@ -56,16 +56,10 @@ export default function DashboardClient() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // --- HYDRATION & PERSISTENCE EFFECTS ---
+  // --- PERSISTENCE EFFECTS ---
 
   useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated) {
-      return;
-    }
+    // This component is wrapped in <ClientOnly>, so this effect runs once on client mount.
     try {
       const storedSite = window.localStorage.getItem('semantic-interlinker-site');
       const initialSite = storedSite ? JSON.parse(storedSite) : null;
@@ -82,15 +76,17 @@ export default function DashboardClient() {
       setSeozoomApiKey(savedKey);
 
     } catch (e) {
-      console.error("Failed to hydrate state from localStorage:", e);
+      console.error("Failed to load state from localStorage:", e);
       setSite(null);
       setSavedReport(null);
       setSeozoomApiKey('');
+    } finally {
+        setIsLoadedFromStorage(true);
     }
-  }, [isHydrated]);
+  }, []);
   
   useEffect(() => {
-    if (isHydrated) {
+    if (isLoadedFromStorage) {
       try {
         if (site) {
           window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
@@ -101,10 +97,10 @@ export default function DashboardClient() {
         console.error("Failed to persist site to localStorage:", e);
       }
     }
-  }, [site, isHydrated]);
+  }, [site, isLoadedFromStorage]);
   
   useEffect(() => {
-    if (isHydrated && site) {
+    if (isLoadedFromStorage && site) {
       try {
         const key = `semantic-interlinker-report-${site}`;
         if (savedReport) {
@@ -116,17 +112,17 @@ export default function DashboardClient() {
         console.error("Failed to persist report to localStorage:", e);
       }
     }
-  }, [savedReport, site, isHydrated]);
+  }, [savedReport, site, isLoadedFromStorage]);
 
   useEffect(() => {
-    if (isHydrated) {
+    if (isLoadedFromStorage) {
         try {
             window.localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
         } catch (e) {
             console.error("Failed to persist SEOZoom API key to localStorage:", e);
         }
     }
-  }, [seozoomApiKey, isHydrated]);
+  }, [seozoomApiKey, isLoadedFromStorage]);
   
   const report = useMemo(() => savedReport?.report ?? null, [savedReport]);
 
@@ -341,12 +337,13 @@ export default function DashboardClient() {
     });
   }, []);
 
-  if (!isHydrated) {
+  if (!isLoadedFromStorage) {
+    // This loader is shown while reading from localStorage, it's client-side only.
     return (
        <div className="flex justify-center items-center py-20">
           <div className="text-center">
             <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <p className="text-slate-600 font-semibold">Caricamento dashboard...</p>
+            <p className="text-slate-600 font-semibold">Inizializzazione client...</p>
           </div>
         </div>
     );
@@ -397,6 +394,7 @@ export default function DashboardClient() {
           selectedSuggestions={selectedSuggestions}
           onViewJson={handleViewJson}
           onViewModification={handleViewModification}
+          // FIX: Corrected typo from onToggleSelection to handleToggleSelection
           onToggleSelection={handleToggleSelection}
           selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
           onSetSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
