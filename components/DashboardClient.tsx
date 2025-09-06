@@ -25,27 +25,11 @@ const loadingMessages = [
 
 export default function DashboardClient() {
   // --- STATE INITIALIZATION ---
-  // Read initial state directly from localStorage. This is safe because this component
-  // is rendered only on the client (due to ssr: false in page.tsx).
-  // This approach avoids hydration errors by not having a different initial state on server/client.
-  const [site, setSite] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const storedSite = window.localStorage.getItem('semantic-interlinker-site');
-      return storedSite ? JSON.parse(storedSite) : null;
-    } catch { return null; }
-  });
-
-  const [savedReport, setSavedReport] = useState<SavedReport | null>(() => {
-    if (typeof window === 'undefined' || !site) return null;
-    try {
-      const reportKey = `semantic-interlinker-report-${site}`;
-      const storedReportItem = window.localStorage.getItem(reportKey);
-      return storedReportItem ? JSON.parse(storedReportItem) : null;
-    } catch { return null; }
-  });
-  
-  const [report, setReport] = useState<Report | null>(savedReport?.report ?? null);
+  // Initialize state with non-browser-dependent values to prevent hydration mismatch.
+  const [isClient, setIsClient] = useState(false);
+  const [site, setSite] = useState<string | null>(null);
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
   
   // --- OTHER STATES ---
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -72,30 +56,58 @@ export default function DashboardClient() {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // --- HYDRATION & PERSISTENCE EFFECTS ---
 
-  // --- PERSISTENCE EFFECTS ---
+  // Step 1: Set a flag once the component has mounted on the client.
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  // Step 2: Once we know we're on the client, safely read from localStorage.
+  useEffect(() => {
+    if (isClient) {
+      try {
+        const storedSite = window.localStorage.getItem('semantic-interlinker-site');
+        const initialSite = storedSite ? JSON.parse(storedSite) : null;
+        setSite(initialSite);
+
+        if (initialSite) {
+            const reportKey = `semantic-interlinker-report-${initialSite}`;
+            const storedReportItem = window.localStorage.getItem(reportKey);
+            const initialSavedReport = storedReportItem ? JSON.parse(storedReportItem) : null;
+            setSavedReport(initialSavedReport);
+            setReport(initialSavedReport?.report ?? null);
+        }
+      } catch (e) {
+        console.error("Failed to read from localStorage:", e);
+      }
+    }
+  }, [isClient]);
+
   // Persist site to localStorage when it changes
   useEffect(() => {
-    try {
-      if (site) {
-        window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
-      } else {
-        window.localStorage.removeItem('semantic-interlinker-site');
-      }
-    } catch (e) {
-      console.error("Failed to persist site to localStorage:", e);
+    if (isClient) {
+        try {
+          if (site) {
+            window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
+          } else {
+            window.localStorage.removeItem('semantic-interlinker-site');
+          }
+        } catch (e) {
+          console.error("Failed to persist site to localStorage:", e);
+        }
     }
-  }, [site]);
+  }, [site, isClient]);
 
   // Persist report to localStorage when it changes
   useEffect(() => {
-    if (site) {
+    if (isClient && site) {
       try {
         const key = `semantic-interlinker-report-${site}`;
         if (savedReport) {
           window.localStorage.setItem(key, JSON.stringify(savedReport));
         } else {
-          // If savedReport is null, remove it from storage for this site to keep things clean.
           window.localStorage.removeItem(key);
         }
       } catch (e) {
@@ -104,7 +116,7 @@ export default function DashboardClient() {
     }
     // Also sync the `report` state whenever `savedReport` changes
     setReport(savedReport?.report ?? null);
-  }, [savedReport, site]);
+  }, [savedReport, site, isClient]);
 
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
@@ -164,9 +176,7 @@ export default function DashboardClient() {
     setSelectedSuggestions(new Set());
     setGscData(gscDataPayload);
     
-    // Set the new site. The useEffect will handle persisting it and clearing old report data if the site changes.
     setSite(siteUrl);
-    // Clear previous report from state immediately for a clean UI
     setSavedReport(null);
 
     const controller = new AbortController();
@@ -200,7 +210,6 @@ export default function DashboardClient() {
         const responseData: Report = await apiResponse.json();
         const newSavedReport: SavedReport = { report: responseData, timestamp: Date.now() };
         
-        // Set the new saved report. The useEffect will persist it and update the `report` state.
         setSavedReport(newSavedReport);
 
     } catch (err) {
@@ -292,8 +301,6 @@ export default function DashboardClient() {
   }, [savedReport]);
   
   const handleNewAnalysis = () => {
-    // Setting site to null will trigger its useEffect to clear localStorage
-    // and also cascade to clear the savedReport
     setSite(null);
     setSavedReport(null);
     setError(null);
@@ -322,6 +329,10 @@ export default function DashboardClient() {
     });
   }, []);
   
+  if (!isClient) {
+     return null; // Render nothing on the server and on the first client render to prevent mismatch
+  }
+
   return (
     <>
       {!report && !isLoading && !error && (
