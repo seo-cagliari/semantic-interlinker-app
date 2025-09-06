@@ -24,14 +24,10 @@ const loadingMessages = [
 
 
 export default function DashboardClient() {
-  // --- STATE INITIALIZATION ---
-  // Initialize state with non-browser-dependent values to prevent hydration mismatch.
-  const [isClient, setIsClient] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
   
-  // --- OTHER STATES ---
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -59,50 +55,48 @@ export default function DashboardClient() {
   
   // --- HYDRATION & PERSISTENCE EFFECTS ---
 
-  // Step 1: Set a flag once the component has mounted on the client.
+  // This single effect handles the safe hydration from localStorage on the client.
   useEffect(() => {
-    setIsClient(true);
-  }, []);
-  
-  // Step 2: Once we know we're on the client, safely read from localStorage.
-  useEffect(() => {
-    if (isClient) {
-      try {
-        const storedSite = window.localStorage.getItem('semantic-interlinker-site');
-        const initialSite = storedSite ? JSON.parse(storedSite) : null;
-        setSite(initialSite);
+    try {
+      const storedSite = window.localStorage.getItem('semantic-interlinker-site');
+      const initialSite = storedSite ? JSON.parse(storedSite) : null;
+      setSite(initialSite);
 
-        if (initialSite) {
-            const reportKey = `semantic-interlinker-report-${initialSite}`;
-            const storedReportItem = window.localStorage.getItem(reportKey);
-            const initialSavedReport = storedReportItem ? JSON.parse(storedReportItem) : null;
-            setSavedReport(initialSavedReport);
-            setReport(initialSavedReport?.report ?? null);
+      if (initialSite) {
+          const reportKey = `semantic-interlinker-report-${initialSite}`;
+          const storedReportItem = window.localStorage.getItem(reportKey);
+          const initialSavedReport = storedReportItem ? JSON.parse(storedReportItem) : null;
+          setSavedReport(initialSavedReport);
+      }
+    } catch (e) {
+      console.error("Failed to hydrate state from localStorage:", e);
+      // Ensure state is clean if localStorage is corrupt
+      setSite(null);
+      setSavedReport(null);
+    } finally {
+      // Mark hydration as complete, allowing the full UI to render.
+      setIsHydrated(true);
+    }
+  }, []); // Empty array ensures this runs only once on client mount.
+  
+  // Persist site to localStorage when it changes, only after initial hydration
+  useEffect(() => {
+    if (isHydrated) {
+      try {
+        if (site) {
+          window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
+        } else {
+          window.localStorage.removeItem('semantic-interlinker-site');
         }
       } catch (e) {
-        console.error("Failed to read from localStorage:", e);
+        console.error("Failed to persist site to localStorage:", e);
       }
     }
-  }, [isClient]);
-
-  // Persist site to localStorage when it changes
+  }, [site, isHydrated]);
+  
+  // Persist report to localStorage when it changes, only after initial hydration
   useEffect(() => {
-    if (isClient) {
-        try {
-          if (site) {
-            window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
-          } else {
-            window.localStorage.removeItem('semantic-interlinker-site');
-          }
-        } catch (e) {
-          console.error("Failed to persist site to localStorage:", e);
-        }
-    }
-  }, [site, isClient]);
-
-  // Persist report to localStorage when it changes
-  useEffect(() => {
-    if (isClient && site) {
+    if (isHydrated && site) {
       try {
         const key = `semantic-interlinker-report-${site}`;
         if (savedReport) {
@@ -114,9 +108,9 @@ export default function DashboardClient() {
         console.error("Failed to persist report to localStorage:", e);
       }
     }
-    // Also sync the `report` state whenever `savedReport` changes
-    setReport(savedReport?.report ?? null);
-  }, [savedReport, site, isClient]);
+  }, [savedReport, site, isHydrated]);
+  
+  const report = useMemo(() => savedReport?.report ?? null, [savedReport]);
 
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
@@ -328,9 +322,19 @@ export default function DashboardClient() {
       return newSet;
     });
   }, []);
-  
-  if (!isClient) {
-     return null; // Render nothing on the server and on the first client render to prevent mismatch
+
+  // While waiting for the client-side hydration to finish, render the skeleton.
+  // This matches the skeleton rendered on the server via next/dynamic.
+  if (!isHydrated) {
+    return (
+       <div className="flex justify-center items-center py-20">
+          <div className="text-center">
+            <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+            <p className="text-slate-600 font-semibold">Caricamento dashboard interattiva...</p>
+            <p className="text-slate-500 text-sm mt-1">L'interfaccia è in fase di inizializzazione sul client.</p>
+          </div>
+        </div>
+    );
   }
 
   return (
