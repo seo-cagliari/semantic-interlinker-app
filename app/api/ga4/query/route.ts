@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
                 dateRanges: [{ startDate, endDate }],
                 dimensions: [{ name: 'pagePath' }],
                 metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'engagementRate' }, { name: 'conversions' }],
-                limit: 5000,
                 keepEmptyRows: false
             },
         });
