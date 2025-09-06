@@ -2,15 +2,18 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
-import { ProgressReportModal } from './ProgressReportModal';
 import { ReportDisplay } from './ReportDisplay';
 import { GscConnect } from './GscConnect';
+import { Filters } from './SuggestionFilters';
+import { ProgressDashboard } from './ProgressDashboard';
 
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
+
+type View = 'connect' | 'loading' | 'report' | 'progress';
 
 interface AnalysisPayload {
     siteUrl: string;
@@ -26,7 +29,7 @@ export default function DashboardClient() {
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
   
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [view, setView] = useState<View>('connect');
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   
@@ -35,6 +38,8 @@ export default function DashboardClient() {
   const [isModificationModalOpen, setIsModificationModalOpen] = useState<boolean>(false);
   const [currentSuggestion, setCurrentSuggestion] = useState<Suggestion | null>(null);
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+
+  const [filters, setFilters] = useState<Filters>({ minScore: 0, cluster: 'all', risk: 'all' });
   
   const [selectedDeepAnalysisUrl, setSelectedDeepAnalysisUrl] = useState<string>('');
   const [deepAnalysisReport, setDeepAnalysisReport] = useState<DeepAnalysisReport | null>(null);
@@ -46,14 +51,12 @@ export default function DashboardClient() {
   const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
   const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
-  const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   
   // --- PERSISTENCE EFFECTS ---
 
   useEffect(() => {
-    // This component is wrapped in <ClientOnly>, so this effect runs once on client mount.
     try {
       const storedSite = window.localStorage.getItem('semantic-interlinker-site');
       const initialSite = storedSite ? JSON.parse(storedSite) : null;
@@ -63,7 +66,10 @@ export default function DashboardClient() {
           const reportKey = `semantic-interlinker-report-${initialSite}`;
           const storedReportItem = window.localStorage.getItem(reportKey);
           const initialSavedReport = storedReportItem ? JSON.parse(storedReportItem) : null;
-          setSavedReport(initialSavedReport);
+          if (initialSavedReport) {
+            setSavedReport(initialSavedReport);
+            setView('report');
+          }
       }
 
       const savedKey = window.localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
@@ -143,12 +149,13 @@ export default function DashboardClient() {
   }, []);
 
   const handleStartAnalysis = useCallback(async (payload: AnalysisPayload) => {
-    setIsLoading(true);
+    setView('loading');
     setError(null);
     setDeepAnalysisReport(null);
     setDeepError(null);
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
+    setFilters({ minScore: 0, cluster: 'all', risk: 'all' });
     setGscData(payload.gscData);
     setLoadingMessage("Connessione al server per avviare l'analisi...");
     
@@ -193,7 +200,7 @@ export default function DashboardClient() {
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep the last, possibly incomplete, line
+          buffer = lines.pop() || '';
 
           for (const line of lines) {
             if (line.trim() === '') continue;
@@ -204,6 +211,7 @@ export default function DashboardClient() {
               } else if (event.type === 'done') {
                 const newSavedReport: SavedReport = { report: event.payload, timestamp: Date.now() };
                 setSavedReport(newSavedReport);
+                setView('report');
               } else if (event.type === 'error') {
                 throw new Error(event.details || event.error);
               }
@@ -220,8 +228,8 @@ export default function DashboardClient() {
         } else {
             setError(err instanceof Error ? err.message : "An unknown error occurred during analysis.");
         }
+        setView('connect');
     } finally {
-        setIsLoading(false);
         abortControllerRef.current = null;
     }
   }, [seozoomApiKey]);
@@ -293,7 +301,7 @@ export default function DashboardClient() {
 
         const data: ProgressReport = await response.json();
         setProgressReport(data);
-        setIsProgressModalOpen(true);
+        setView('progress');
     } catch (err) {
         setProgressError(err instanceof Error ? err.message : "Si è verificato un errore durante l'analisi dei progressi.");
     } finally {
@@ -306,6 +314,7 @@ export default function DashboardClient() {
     setSavedReport(null);
     setError(null);
     setDeepAnalysisReport(null);
+    setView('connect');
   };
 
   const handleViewJson = useCallback((suggestion: Suggestion) => {
@@ -331,7 +340,6 @@ export default function DashboardClient() {
   }, []);
 
   if (!isLoadedFromStorage) {
-    // This loader is shown while reading from localStorage, it's client-side only.
     return (
        <div className="flex justify-center items-center py-20">
           <div className="text-center">
@@ -342,60 +350,79 @@ export default function DashboardClient() {
     );
   }
 
+  const renderContent = () => {
+    switch (view) {
+        case 'connect':
+            return (
+                <GscConnect 
+                    onAnalysisStart={handleStartAnalysis}
+                    savedReport={savedReport}
+                    onProgressCheck={handleProgressCheck}
+                    isProgressLoading={isProgressLoading}
+                    progressError={progressError}
+                    seozoomApiKey={seozoomApiKey}
+                    onSeozoomApiKeyChange={setSeozoomApiKey}
+                />
+            );
+        case 'loading':
+            return (
+                <div className="text-center py-16 flex flex-col items-center">
+                    <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
+                    <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
+                    <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>{loadingMessage}</p>
+                </div>
+            );
+        case 'report':
+            if (report) {
+                return (
+                    <ReportDisplay
+                        report={report}
+                        sortedPages={sortedPageDiagnostics}
+                        savedReport={savedReport}
+                        isProgressLoading={isProgressLoading}
+                        onProgressCheck={handleProgressCheck}
+                        onNewAnalysis={handleNewAnalysis}
+                        onAnalyzeFromHub={(url) => handleDeepAnalysis(url)}
+                        selectedSuggestions={selectedSuggestions}
+                        onViewJson={handleViewJson}
+                        onViewModification={handleViewModification}
+                        onToggleSelection={handleToggleSelection}
+                        selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
+                        onSetSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
+                        onDeepAnalysis={() => handleDeepAnalysis()}
+                        isDeepLoading={isDeepLoading}
+                        deepError={deepError}
+                        deepAnalysisReport={deepAnalysisReport}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                    />
+                );
+            }
+            // Fallback for error state or if report is null
+            return (
+                 <div className="text-center py-12 max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md border border-red-200">
+                    <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
+                    <h2 className="text-xl font-semibold text-red-800 mb-2">Errore Imprevisto</h2>
+                    <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error || 'Impossibile visualizzare il report.'}</p>
+                    <button onClick={handleNewAnalysis} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+                        Inizia una Nuova Analisi
+                    </button>
+                </div>
+            );
+        case 'progress':
+            if (progressReport) {
+                return <ProgressDashboard report={progressReport} onBack={() => setView('report')} />;
+            }
+             // Fallback if progress report is missing
+            setView('report'); 
+            return null;
+    }
+  };
+
+
   return (
     <>
-      {!report && !isLoading && !error && (
-        <GscConnect 
-          onAnalysisStart={handleStartAnalysis}
-          savedReport={savedReport}
-          onProgressCheck={handleProgressCheck}
-          isProgressLoading={isProgressLoading}
-          progressError={progressError}
-          seozoomApiKey={seozoomApiKey}
-          onSeozoomApiKeyChange={setSeozoomApiKey}
-        />
-      )}
-
-      {isLoading && (
-          <div className="text-center py-16 flex flex-col items-center">
-            <LoadingSpinnerIcon className="w-16 h-16 text-blue-600 mb-4"/>
-            <h2 className="text-xl font-semibold mb-2">Analisi strategica in corso...</h2>
-            <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>{loadingMessage}</p>
-          </div>
-      )}
-
-      {error && (
-        <div className="text-center py-12 max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md border border-red-200">
-          <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
-          <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
-          <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
-          <button onClick={handleNewAnalysis} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
-              Riprova
-          </button>
-        </div>
-      )}
-
-      {report && (
-        <ReportDisplay
-          report={report}
-          sortedPages={sortedPageDiagnostics}
-          savedReport={savedReport}
-          isProgressLoading={isProgressLoading}
-          onProgressCheck={handleProgressCheck}
-          onNewAnalysis={handleNewAnalysis}
-          onAnalyzeFromHub={(url) => handleDeepAnalysis(url)}
-          selectedSuggestions={selectedSuggestions}
-          onViewJson={handleViewJson}
-          onViewModification={handleViewModification}
-          onToggleSelection={handleToggleSelection}
-          selectedDeepAnalysisUrl={selectedDeepAnalysisUrl}
-          onSetSelectedDeepAnalysisUrl={setSelectedDeepAnalysisUrl}
-          onDeepAnalysis={() => handleDeepAnalysis()}
-          isDeepLoading={isDeepLoading}
-          deepError={deepError}
-          deepAnalysisReport={deepAnalysisReport}
-        />
-      )}
+      {renderContent()}
       
       <JsonModal
         isOpen={isJsonModalOpen}
@@ -406,11 +433,6 @@ export default function DashboardClient() {
         isOpen={isModificationModalOpen}
         onClose={() => setIsModificationModalOpen(false)}
         suggestion={currentSuggestion}
-      />
-      <ProgressReportModal
-        isOpen={isProgressModalOpen}
-        onClose={() => setIsProgressModalOpen(false)}
-        report={progressReport}
       />
     </>
   );

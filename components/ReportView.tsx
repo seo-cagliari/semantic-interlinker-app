@@ -1,11 +1,13 @@
-import React from 'react';
-import { Report, DeepAnalysisReport, PageDiagnostic, Suggestion } from '../types';
+
+import React, { useMemo } from 'react';
+import { Report, DeepAnalysisReport, PageDiagnostic, Suggestion, ThematicCluster } from '../types';
 import { LoadingSpinnerIcon, BrainCircuitIcon, LinkIcon, XCircleIcon } from './Icons';
 import { SuggestionCard } from './SuggestionCard';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
 import { OpportunityHub } from './OpportunityHub';
 import { ThematicClusters } from './ThematicClusters';
+import { SuggestionFilters, Filters } from './SuggestionFilters';
 
 interface ReportViewProps {
   report: Report;
@@ -21,6 +23,8 @@ interface ReportViewProps {
   isDeepLoading: boolean;
   deepError: string | null;
   deepAnalysisReport: DeepAnalysisReport | null;
+  filters: Filters;
+  onFiltersChange: (newFilters: Filters) => void;
 }
 
 export const ReportView = (props: ReportViewProps) => {
@@ -38,7 +42,31 @@ export const ReportView = (props: ReportViewProps) => {
     isDeepLoading,
     deepError,
     deepAnalysisReport,
+    filters,
+    onFiltersChange,
   } = props;
+
+  const filteredSuggestions = useMemo(() => {
+    const { minScore, cluster, risk } = filters;
+    if (!report.suggestions) return [];
+
+    return report.suggestions.filter(suggestion => {
+        // Score filter
+        if (suggestion.score < minScore) return false;
+
+        // Risk filter
+        if (risk === 'with' && !suggestion.risk_checks.potential_cannibalization) return false;
+        if (risk === 'without' && suggestion.risk_checks.potential_cannibalization) return false;
+
+        // Cluster filter
+        if (cluster !== 'all') {
+            const sourceCluster = report.thematic_clusters.find(c => c.pages.includes(suggestion.source_url));
+            if (!sourceCluster || sourceCluster.cluster_name !== cluster) return false;
+        }
+
+        return true;
+    });
+  }, [report.suggestions, report.thematic_clusters, filters]);
 
   return (
     <>
@@ -54,23 +82,38 @@ export const ReportView = (props: ReportViewProps) => {
           <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
       )}
       
-      <div className="flex items-center gap-3 mb-4 mt-16">
-          <LinkIcon className="w-8 h-8 text-slate-500" />
-          <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento</h2>
+      <div className="mt-16">
+        <div className="flex items-center gap-3 mb-4">
+            <LinkIcon className="w-8 h-8 text-slate-500" />
+            <h2 className="text-2xl font-bold text-slate-800">Suggerimenti di Collegamento</h2>
+        </div>
+        <SuggestionFilters 
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          clusters={report.thematic_clusters || []}
+          filteredCount={filteredSuggestions.length}
+          totalCount={(report.suggestions || []).length}
+        />
+        <div className="space-y-6">
+            {filteredSuggestions.map((suggestion, index) => (
+            <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 50}ms` }}>
+                <SuggestionCard
+                suggestion={suggestion}
+                isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
+                onViewJson={onViewJson}
+                onViewModification={onViewModification}
+                onToggleSelection={onToggleSelection}
+                />
+            </div>
+            ))}
+            {filteredSuggestions.length === 0 && (
+              <div className="text-center py-12 text-slate-500">
+                <p>Nessun suggerimento corrisponde ai filtri selezionati.</p>
+              </div>
+            )}
+        </div>
       </div>
-      <div className="space-y-6">
-          {(report.suggestions || []).map((suggestion, index) => (
-          <div key={suggestion.suggestion_id} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
-              <SuggestionCard
-              suggestion={suggestion}
-              isSelected={selectedSuggestions.has(suggestion.suggestion_id)}
-              onViewJson={onViewJson}
-              onViewModification={onViewModification}
-              onToggleSelection={onToggleSelection}
-              />
-          </div>
-          ))}
-      </div>
+
 
       <div id="deep-analysis-section" className="mt-16 bg-slate-100 p-6 rounded-2xl border border-slate-200 scroll-mt-4">
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Analisi Approfondita di Pagina</h2>

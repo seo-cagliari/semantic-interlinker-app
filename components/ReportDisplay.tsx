@@ -1,8 +1,10 @@
+
 import React, { useState } from 'react';
-import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
+import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion, ThematicCluster } from '../types';
 import VisualizerView from './VisualizerView';
 import { ReportView } from './ReportView';
 import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon } from './Icons';
+import { Filters } from './SuggestionFilters';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -24,6 +26,8 @@ interface ReportDisplayProps {
   isDeepLoading: boolean;
   deepError: string | null;
   deepAnalysisReport: DeepAnalysisReport | null;
+  filters: Filters;
+  onFiltersChange: (newFilters: Filters) => void;
 }
 
 export const ReportDisplay = (props: ReportDisplayProps) => {
