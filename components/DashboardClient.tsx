@@ -24,11 +24,30 @@ const loadingMessages = [
 
 
 export default function DashboardClient() {
-  const [isReady, setIsReady] = useState(false);
+  // --- STATE INITIALIZATION ---
+  // Read initial state directly from localStorage. This is safe because this component
+  // is rendered only on the client (due to ssr: false in page.tsx).
+  // This approach avoids hydration errors by not having a different initial state on server/client.
+  const [site, setSite] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const storedSite = window.localStorage.getItem('semantic-interlinker-site');
+      return storedSite ? JSON.parse(storedSite) : null;
+    } catch { return null; }
+  });
+
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(() => {
+    if (typeof window === 'undefined' || !site) return null;
+    try {
+      const reportKey = `semantic-interlinker-report-${site}`;
+      const storedReportItem = window.localStorage.getItem(reportKey);
+      return storedReportItem ? JSON.parse(storedReportItem) : null;
+    } catch { return null; }
+  });
   
-  const [site, setSite] = useState<string | null>(null);
-  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<Report | null>(savedReport?.report ?? null);
+  
+  // --- OTHER STATES ---
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -54,30 +73,39 @@ export default function DashboardClient() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // --- PERSISTENCE EFFECTS ---
+  // Persist site to localStorage when it changes
   useEffect(() => {
-    // This effect runs only on the client after mounting
     try {
-      const storedSite = window.localStorage.getItem('semantic-interlinker-site');
-      if (storedSite) {
-        const siteUrl = JSON.parse(storedSite);
-        setSite(siteUrl);
-        
-        const reportKey = `semantic-interlinker-report-${siteUrl}`;
-        const storedReportItem = window.localStorage.getItem(reportKey);
-        if (storedReportItem) {
-          const parsedReport = JSON.parse(storedReportItem) as SavedReport;
-          setSavedReport(parsedReport);
-          setReport(parsedReport.report);
-        }
+      if (site) {
+        window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(site));
+      } else {
+        window.localStorage.removeItem('semantic-interlinker-site');
       }
     } catch (e) {
-      console.error("Failed to hydrate from localStorage:", e);
-      window.localStorage.removeItem('semantic-interlinker-site');
-    } finally {
-        setIsReady(true);
+      console.error("Failed to persist site to localStorage:", e);
     }
-  }, []);
-  
+  }, [site]);
+
+  // Persist report to localStorage when it changes
+  useEffect(() => {
+    if (site) {
+      try {
+        const key = `semantic-interlinker-report-${site}`;
+        if (savedReport) {
+          window.localStorage.setItem(key, JSON.stringify(savedReport));
+        } else {
+          // If savedReport is null, remove it from storage for this site to keep things clean.
+          window.localStorage.removeItem(key);
+        }
+      } catch (e) {
+        console.error("Failed to persist report to localStorage:", e);
+      }
+    }
+    // Also sync the `report` state whenever `savedReport` changes
+    setReport(savedReport?.report ?? null);
+  }, [savedReport, site]);
+
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
     return [...report.page_diagnostics].sort((a, b) => b.internal_authority_score - a.internal_authority_score);
@@ -129,7 +157,6 @@ export default function DashboardClient() {
 
   const handleStartAnalysis = useCallback(async (siteUrl: string, gscDataPayload: GscDataRow[], gscSiteUrl: string, seozoomApiKey?: string, strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] }) => {
     setIsLoading(true);
-    setReport(null);
     setError(null);
     setDeepAnalysisReport(null);
     setDeepError(null);
@@ -137,13 +164,15 @@ export default function DashboardClient() {
     setSelectedSuggestions(new Set());
     setGscData(gscDataPayload);
     
+    // Set the new site. The useEffect will handle persisting it and clearing old report data if the site changes.
+    setSite(siteUrl);
+    // Clear previous report from state immediately for a clean UI
+    setSavedReport(null);
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     try {
-        window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(siteUrl));
-        setSite(siteUrl);
-
         const apiResponse = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -171,11 +200,8 @@ export default function DashboardClient() {
         const responseData: Report = await apiResponse.json();
         const newSavedReport: SavedReport = { report: responseData, timestamp: Date.now() };
         
-        const key = `semantic-interlinker-report-${siteUrl}`;
-        window.localStorage.setItem(key, JSON.stringify(newSavedReport));
-
+        // Set the new saved report. The useEffect will persist it and update the `report` state.
         setSavedReport(newSavedReport);
-        setReport(responseData);
 
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -266,13 +292,9 @@ export default function DashboardClient() {
   }, [savedReport]);
   
   const handleNewAnalysis = () => {
-    if (site) {
-        window.localStorage.removeItem(`semantic-interlinker-report-${site}`);
-    }
-    window.localStorage.removeItem('semantic-interlinker-site');
-    
+    // Setting site to null will trigger its useEffect to clear localStorage
+    // and also cascade to clear the savedReport
     setSite(null);
-    setReport(null);
     setSavedReport(null);
     setError(null);
     setDeepAnalysisReport(null);
@@ -299,10 +321,6 @@ export default function DashboardClient() {
       return newSet;
     });
   }, []);
-
-  if (!isReady) {
-    return null; // Render nothing on the server and during initial client mount
-  }
   
   return (
     <>
@@ -329,7 +347,7 @@ export default function DashboardClient() {
           <XCircleIcon className="w-12 h-12 mx-auto text-red-400 mb-4" />
           <h2 className="text-xl font-semibold text-red-800 mb-2">Si è verificato un errore</h2>
           <p className="text-slate-600 mb-4 whitespace-pre-wrap">{error}</p>
-          <button onClick={() => { setError(null); setIsLoading(false); handleNewAnalysis(); }} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
+          <button onClick={handleNewAnalysis} className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors">
               Riprova
           </button>
         </div>
