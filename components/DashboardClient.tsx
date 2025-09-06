@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, PageDiagnostic } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { GscConnect } from './GscConnect';
 import { BrainCircuitIcon, LoadingSpinnerIcon, XCircleIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
-import useLocalStorage from '../hooks/useLocalStorage';
 import { ReportDisplay } from './ReportDisplay';
 
 const loadingMessages = [
@@ -24,17 +23,12 @@ const loadingMessages = [
 ];
 
 const DashboardClient = () => {
-  const [site, setSite] = useLocalStorage<string | null>('semantic-interlinker-site', null);
-  
-  // `savedReport` holds the report data from localStorage, managed via a dedicated effect to avoid hydration errors.
+  const [isReady, setIsReady] = useState(false);
+  const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
-  
-  // `report` is the currently active/displayed report. It can be from storage or a new analysis.
   const [report, setReport] = useState<Report | null>(null);
-  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -58,33 +52,30 @@ const DashboardClient = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // This effect synchronizes `savedReport` and `report` from localStorage when the `site` changes.
   useEffect(() => {
-    if (site) {
-      const key = `semantic-interlinker-report-${site}`;
-      const item = window.localStorage.getItem(key);
-      if (item) {
-        try {
-          const parsed = JSON.parse(item) as SavedReport;
-          setSavedReport(parsed);
-          setReport(parsed.report);
-        } catch (error) {
-          console.error(`Error reading or parsing saved report for site ${site}:`, error);
-          window.localStorage.removeItem(key); // Clean up corrupted data
-          setSavedReport(null);
-          setReport(null);
+    // This effect runs once on the client to safely hydrate state from localStorage.
+    try {
+      const storedSite = window.localStorage.getItem('semantic-interlinker-site');
+      if (storedSite) {
+        const siteUrl = JSON.parse(storedSite);
+        setSite(siteUrl);
+        
+        const reportKey = `semantic-interlinker-report-${siteUrl}`;
+        const storedReportItem = window.localStorage.getItem(reportKey);
+        if (storedReportItem) {
+          const parsedReport = JSON.parse(storedReportItem) as SavedReport;
+          setSavedReport(parsedReport);
+          setReport(parsedReport.report);
         }
-      } else {
-        // No report found in storage for this site, ensure states are clean.
-        setSavedReport(null);
-        setReport(null);
       }
-    } else {
-      // No site is selected, ensure states are clean.
-      setSavedReport(null);
-      setReport(null);
+    } catch (e) {
+      console.error("Failed to hydrate from localStorage:", e);
+      // Clear potentially corrupted storage
+      window.localStorage.removeItem('semantic-interlinker-site');
+    } finally {
+      setIsReady(true);
     }
-  }, [site]);
+  }, []);
   
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
@@ -94,10 +85,8 @@ const DashboardClient = () => {
 
   useEffect(() => {
     if (report && sortedPageDiagnostics.length > 0 && !selectedDeepAnalysisUrl) {
-      // If a report is loaded and no URL is selected yet, default to the top page
       setSelectedDeepAnalysisUrl(sortedPageDiagnostics[0].url);
     } else if (!report) {
-      // If the report is cleared, clear the selected URL
       setSelectedDeepAnalysisUrl('');
     }
   }, [report, sortedPageDiagnostics, selectedDeepAnalysisUrl]);
@@ -151,6 +140,9 @@ const DashboardClient = () => {
     abortControllerRef.current = controller;
 
     try {
+        window.localStorage.setItem('semantic-interlinker-site', JSON.stringify(siteUrl));
+        setSite(siteUrl);
+
         const apiResponse = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -178,12 +170,9 @@ const DashboardClient = () => {
         const responseData: Report = await apiResponse.json();
         const newSavedReport: SavedReport = { report: responseData, timestamp: Date.now() };
         
-        // Update localStorage first
         const key = `semantic-interlinker-report-${siteUrl}`;
         window.localStorage.setItem(key, JSON.stringify(newSavedReport));
 
-        // Then update the state. `setSite` will trigger the useEffect to re-read, but we also set state directly for immediate UI update.
-        setSite(siteUrl);
         setSavedReport(newSavedReport);
         setReport(responseData);
 
@@ -198,7 +187,7 @@ const DashboardClient = () => {
         setIsLoading(false);
         abortControllerRef.current = null;
     }
-  }, [setSite]);
+  }, []);
 
   const handleDeepAnalysis = useCallback(async (urlToAnalyze?: string) => {
     const finalUrl = urlToAnalyze || selectedDeepAnalysisUrl;
@@ -276,13 +265,14 @@ const DashboardClient = () => {
   }, [savedReport]);
   
   const handleNewAnalysis = () => {
-    // Clear storage for the current site
     if (site) {
-        const key = `semantic-interlinker-report-${site}`;
-        window.localStorage.removeItem(key);
+        window.localStorage.removeItem(`semantic-interlinker-report-${site}`);
     }
-    // Clear component state. `setSite(null)` will trigger a cleanup effect.
+    window.localStorage.removeItem('semantic-interlinker-site');
+    
     setSite(null);
+    setReport(null);
+    setSavedReport(null);
     setError(null);
     setDeepAnalysisReport(null);
   };
@@ -308,6 +298,10 @@ const DashboardClient = () => {
       return newSet;
     });
   }, []);
+
+  if (!isReady) {
+    return null; // The parent page component handles the initial loading skeleton
+  }
 
   return (
     <div className="font-sans bg-slate-50 min-h-screen text-slate-800">

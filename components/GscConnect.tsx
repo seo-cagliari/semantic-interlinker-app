@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { GscSite, GscDataRow, SavedReport } from '../types';
 import { LoadingSpinnerIcon, GoogleGIcon, LinkIcon, XCircleIcon, ClockIcon } from './Icons';
@@ -85,8 +86,6 @@ export const GscConnect = (props: GscConnectProps) => {
     if (finalSiteUrl.startsWith('sc-domain:')) {
       finalSiteUrl = `https://${finalSiteUrl.substring(10)}`;
     }
-
-    localStorage.setItem('semantic-interlinker-site', finalSiteUrl);
 
     try {
       const response = await fetch('/api/gsc/query', {
