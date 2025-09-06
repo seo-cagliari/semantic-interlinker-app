@@ -1,3 +1,4 @@
+
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -60,7 +61,6 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
-  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
 
   if (missingVars.length > 0) {
     const errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
@@ -68,8 +68,8 @@ export async function GET(req: NextRequest) {
     return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
 
-  const baseUrl = process.env.APP_BASE_URL;
-  const redirectUri = `${baseUrl}/api/gsc/callback`;
+  const url = new URL(req.url);
+  const redirectUri = `${url.origin}/api/gsc/callback`;
 
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     oauth2Client.setCredentials(tokens);
 
     // Use NextResponse for robust redirection and cookie setting
-    const response = NextResponse.redirect(new URL('/dashboard', baseUrl));
+    const response = NextResponse.redirect(new URL('/dashboard', url.origin));
     
     response.cookies.set('gsc_token', JSON.stringify(tokens), {
       httpOnly: true,

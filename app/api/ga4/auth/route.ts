@@ -8,7 +8,6 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
-  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
 
   if (missingVars.length > 0) {
     const errorMsg = `Le seguenti variabili d'ambiente del server non sono configurate: ${missingVars.join(', ')}.`;
@@ -17,8 +16,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const baseUrl = process.env.APP_BASE_URL;
-    const redirectUri = `${baseUrl}/api/ga4/callback`;
+    const url = new URL(req.url);
+    const redirectUri = `${url.origin}/api/ga4/callback`;
     
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,

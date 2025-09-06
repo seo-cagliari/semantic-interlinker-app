@@ -62,7 +62,6 @@ export async function GET(req: NextRequest) {
   const missingVars = [];
   if (!process.env.GOOGLE_CLIENT_ID) missingVars.push('GOOGLE_CLIENT_ID');
   if (!process.env.GOOGLE_CLIENT_SECRET) missingVars.push('GOOGLE_CLIENT_SECRET');
-  if (!process.env.APP_BASE_URL) missingVars.push('APP_BASE_URL');
 
   if (missingVars.length > 0) {
     const errorMessage = `Errore di configurazione del server: Le seguenti variabili d'ambiente mancano: <code>${missingVars.join(', ')}</code>.`;
@@ -70,8 +69,8 @@ export async function GET(req: NextRequest) {
     return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
 
-  const baseUrl = process.env.APP_BASE_URL;
-  const redirectUri = `${baseUrl}/api/ga4/callback`;
+  const url = new URL(req.url);
+  const redirectUri = `${url.origin}/api/ga4/callback`;
 
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -83,7 +82,7 @@ export async function GET(req: NextRequest) {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
-    const response = NextResponse.redirect(new URL('/dashboard', baseUrl));
+    const response = NextResponse.redirect(new URL('/dashboard', url.origin));
     
     response.cookies.set('ga4_token', JSON.stringify(tokens), {
       httpOnly: true,
@@ -104,7 +103,7 @@ export async function GET(req: NextRequest) {
     if (errorResponse.error === 'redirect_uri_mismatch') {
         message += `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
                     <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
-                    <p><b>URI inviato:</b> <code>${redirectUri}</code>. Assicurati che questo esatto valore sia presente negli "URI di reindirizzamento autorizzati" del tuo client OAuth.</p>`;
+                    <p><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code>. Assicurati che questo esatto valore sia presente negli "URI di reindirizzamento autorizzati" del tuo client OAuth.</p>`;
     } else {
         message += `<p>Controlla la configurazione del tuo client OAuth nella Google Cloud Console.</p>`;
     }
