@@ -33,7 +33,6 @@ const ReportDisplay = (props: ReportDisplayProps) => {
     onProgressCheck,
     onNewAnalysis,
     report,
-    ...reportViewProps
   } = props;
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
@@ -98,7 +97,25 @@ const ReportDisplay = (props: ReportDisplayProps) => {
         </div>
       </div>
 
-      {viewMode === 'report' ? <ReportView report={report} {...reportViewProps} /> : <VisualizerView report={report} />}
+      {viewMode === 'report' ? (
+        <ReportView
+          report={props.report}
+          sortedPages={props.sortedPages}
+          onAnalyzeFromHub={props.onAnalyzeFromHub}
+          selectedSuggestions={props.selectedSuggestions}
+          onViewJson={props.onViewJson}
+          onViewModification={props.onViewModification}
+          onToggleSelection={props.onToggleSelection}
+          selectedDeepAnalysisUrl={props.selectedDeepAnalysisUrl}
+          onSetSelectedDeepAnalysisUrl={props.onSetSelectedDeepAnalysisUrl}
+          onDeepAnalysis={props.onDeepAnalysis}
+          isDeepLoading={props.isDeepLoading}
+          deepError={props.deepError}
+          deepAnalysisReport={props.deepAnalysisReport}
+        />
+      ) : (
+        <VisualizerView report={report} />
+      )}
     </div>
   );
 };
