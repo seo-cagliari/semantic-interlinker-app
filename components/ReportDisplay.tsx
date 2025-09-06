@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
 import ReportView from './ReportView';
@@ -27,6 +28,7 @@ interface ReportDisplayProps {
 }
 
 const ReportDisplay = (props: ReportDisplayProps) => {
+  const { report, sortedPages, savedReport, isProgressLoading, onProgressCheck, onNewAnalysis, onAnalyzeFromHub, selectedSuggestions, onViewJson, onViewModification, onToggleSelection, selectedDeepAnalysisUrl, onSetSelectedDeepAnalysisUrl, onDeepAnalysis, isDeepLoading, deepError, deepAnalysisReport } = props;
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   return (
@@ -52,19 +54,19 @@ const ReportDisplay = (props: ReportDisplayProps) => {
               )}
             </button>
             <button
-                onClick={props.onNewAnalysis}
+                onClick={onNewAnalysis}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
             >
                 <ArrowPathIcon className="w-5 h-5" />
                 Nuova Analisi
             </button>
-            {props.savedReport && (
+            {savedReport && (
                 <button
-                    onClick={props.onProgressCheck}
-                    disabled={props.isProgressLoading}
+                    onClick={onProgressCheck}
+                    disabled={isProgressLoading}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300"
                 >
-                    {props.isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
+                    {isProgressLoading ? <LoadingSpinnerIcon className="w-5 h-5" /> : <ClockIcon className="w-5 h-5" />}
                     Controlla Progresso
                 </button>
             )}
@@ -73,24 +75,24 @@ const ReportDisplay = (props: ReportDisplayProps) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           <div className="bg-slate-100 p-4 rounded-lg">
             <p className="text-sm text-slate-500">Pagine Scansite</p>
-            <p className="text-2xl font-bold text-slate-800">{props.report.summary.pages_scanned}</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.pages_scanned}</p>
           </div>
           <div className="bg-slate-100 p-4 rounded-lg">
             <p className="text-sm text-slate-500">Pagine Indicizzabili</p>
-            <p className="text-2xl font-bold text-slate-800">{props.report.summary.indexable_pages}</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.indexable_pages}</p>
           </div>
           <div className="bg-slate-100 p-4 rounded-lg">
             <p className="text-sm text-slate-500">Suggerimenti</p>
-            <p className="text-2xl font-bold text-slate-800">{props.report.summary.suggestions_total}</p>
+            <p className="text-2xl font-bold text-slate-800">{report.summary.suggestions_total}</p>
           </div>
           <div className="bg-green-100 p-4 rounded-lg">
             <p className="text-sm text-green-600">Priorità Alta</p>
-            <p className="text-2xl font-bold text-green-800">{props.report.summary.high_priority}</p>
+            <p className="text-2xl font-bold text-green-800">{report.summary.high_priority}</p>
           </div>
         </div>
       </div>
 
-      {viewMode === 'report' ? <ReportView {...props} /> : <VisualizerView report={props.report} />}
+      {viewMode === 'report' ? <ReportView {...props} /> : <VisualizerView report={report} />}
     </div>
   );
 };

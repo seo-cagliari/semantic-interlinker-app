@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Suggestion } from '../types';
 import { CheckCircleIcon, CodeBracketIcon, PencilSquareIcon, ExclamationTriangleIcon, LinkIcon, MapPinIcon, TagIcon } from './Icons';

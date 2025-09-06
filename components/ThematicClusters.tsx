@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ThematicCluster } from '../types';
 import { FolderIcon } from './Icons';

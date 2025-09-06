@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Suggestion, Report, DeepAnalysisReport, PageDiagnostic } from '../types';
 import { SuggestionCard } from './SuggestionCard';

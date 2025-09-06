@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { OpportunityPage } from '../types';
 import { BrainCircuitIcon, ChartBarIcon } from './Icons';

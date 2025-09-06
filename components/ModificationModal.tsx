@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Suggestion } from '../types';
 import { CloseIcon, ClipboardIcon, CheckCircleIcon } from './Icons';
