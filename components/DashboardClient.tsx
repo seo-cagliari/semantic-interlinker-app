@@ -10,20 +10,6 @@ import { ProgressReportModal } from './ProgressReportModal';
 import { ReportDisplay } from './ReportDisplay';
 import { GscConnect } from './GscConnect';
 
-const loadingMessages = [
-  "Avvio dell'analisi strategica...",
-  "Sto interrogando i dati di Google Search Console (ultimi 90 giorni)...",
-  "Sto recuperando i dati comportamentali da Google Analytics 4...",
-  "Calcolo dell'autorità interna e del potenziale di crescita per ogni pagina...",
-  "Orchestrazione dell'agente AI 'Information Architect'...",
-  "Raggruppamento delle pagine in cluster tematici per l'analisi...",
-  "Deploy dell'agente AI 'Semantic Linking Strategist'...",
-  "Identificazione delle opportunità di linking e diagnosi dei rischi (es. cannibalizzazione)...",
-  "Attivazione dell'agente AI 'Content Strategist'...",
-  "Ricerca di 'content gap' e nuove opportunità editoriali...",
-  "Quasi finito, sto compilando il report finale e il cruscotto strategico...",
-];
-
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
 
 interface AnalysisPayload {
@@ -43,8 +29,7 @@ export default function DashboardClient() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
-  const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
   const [selectedSuggestionJson, setSelectedSuggestionJson] = useState<string>('');
   const [isModificationModalOpen, setIsModificationModalOpen] = useState<boolean>(false);
@@ -148,33 +133,6 @@ export default function DashboardClient() {
       setSelectedDeepAnalysisUrl('');
     }
   }, [report, sortedPageDiagnostics, selectedDeepAnalysisUrl]);
-  
-  useEffect(() => {
-    const cleanup = () => {
-      if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current);
-        loadingIntervalRef.current = null;
-      }
-    };
-
-    if (isLoading) {
-      let messageIndex = 0;
-      setLoadingMessage(loadingMessages[0]);
-      
-      loadingIntervalRef.current = setInterval(() => {
-        messageIndex++;
-        if (messageIndex < loadingMessages.length) {
-          setLoadingMessage(loadingMessages[messageIndex]);
-        } else {
-          cleanup();
-        }
-      }, 3000);
-    } else {
-      cleanup();
-    }
-    
-    return cleanup;
-  }, [isLoading]);
 
   useEffect(() => {
     return () => {
@@ -192,12 +150,12 @@ export default function DashboardClient() {
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
     setGscData(payload.gscData);
+    setLoadingMessage("Connessione al server per avviare l'analisi...");
     
     setSite(payload.siteUrl);
     setSavedReport(null);
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortControllerRef.current = new AbortController();
 
     try {
         const apiResponse = await fetch('/api/analyze', {
@@ -211,10 +169,10 @@ export default function DashboardClient() {
             seozoomApiKey: seozoomApiKey,
             strategyOptions: payload.strategyOptions
           }),
-          signal: controller.signal
+          signal: abortControllerRef.current.signal
         });
         
-        if (!apiResponse.ok) {
+        if (!apiResponse.ok || !apiResponse.body) {
             let errorDetails = `Server responded with status ${apiResponse.status}.`;
             try {
                 const errorData = await apiResponse.json();
@@ -225,10 +183,35 @@ export default function DashboardClient() {
             throw new Error(errorDetails);
         }
         
-        const responseData: Report = await apiResponse.json();
-        const newSavedReport: SavedReport = { report: responseData, timestamp: Date.now() };
-        
-        setSavedReport(newSavedReport);
+        const reader = apiResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep the last, possibly incomplete, line
+
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'progress') {
+                setLoadingMessage(event.message);
+              } else if (event.type === 'done') {
+                const newSavedReport: SavedReport = { report: event.payload, timestamp: Date.now() };
+                setSavedReport(newSavedReport);
+              } else if (event.type === 'error') {
+                throw new Error(event.details || event.error);
+              }
+            } catch (e) {
+              console.error("Failed to parse stream chunk as JSON:", line, e);
+            }
+          }
+        }
 
     } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {

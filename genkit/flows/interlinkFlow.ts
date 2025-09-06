@@ -167,8 +167,9 @@ export async function interlinkFlow(options: {
   strategyOptions?: { strategy: 'global' | 'pillar' | 'money'; targetUrls: string[] };
   ga4Data?: Ga4DataRow[];
   applyDraft: boolean;
-}): Promise<Report> {
-  console.log("Master Agent started with options:", options);
+  sendEvent: (event: object) => void;
+}): Promise<void> {
+  options.sendEvent({ type: 'progress', message: "Avvio dell'analisi strategica..." });
   if (!options.site_root) throw new Error("site_root is required for analysis.");
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -192,8 +193,9 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
 
 
   // PHASE 0: AUTHORITY & OPPORTUNITY CALCULATION
-  console.log("Master Agent - Phase 0: Authority & Opportunity Calculation...");
+  options.sendEvent({ type: 'progress', message: "Fase 0: Calcolo Autorità Interna e Opportunità di Crescita..." });
   const allPagesWithContent = await wp.getAllPublishedPages(options.site_root);
+  options.sendEvent({ type: 'progress', message: `Recuperate ${allPagesWithContent.length} pagine e articoli. Ora analizzo i link interni...` });
   const internalLinksMap = await wp.getAllInternalLinksFromAllPages(options.site_root, allPagesWithContent);
   const pagesWithScores = calculateInternalAuthority(
       internalLinksMap,
@@ -208,7 +210,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   
   const opportunityHubData = calculateOpportunityHub(options.gscData, pageDiagnostics);
 
-  console.log(`Master Agent - Phase 0 complete. Calculated authority for ${pageDiagnostics.length} pages and found ${opportunityHubData.length} opportunities.`);
+  options.sendEvent({ type: 'progress', message: `Fase 0 completa. Calcolata l'autorità per ${pageDiagnostics.length} pagine.` });
 
   const allSiteUrls = pageDiagnostics.map(p => p.url);
   if (allSiteUrls.length === 0) {
@@ -216,7 +218,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   }
 
   // --- AGENT 1: INFORMATION ARCHITECT ---
-  console.log("Master Agent deploying Agent 1: Information Architect...");
+  options.sendEvent({ type: 'progress', message: "Agente 1: L'Architetto dell'Informazione sta analizzando la struttura del sito..." });
   const clusterPrompt = `
     Agisci come un architetto dell'informazione e un esperto SEO per il sito "${options.site_root}".
     Il tuo compito è analizzare la struttura del sito e i dati di performance per raggruppare gli URL in 3-6 cluster tematici.
@@ -261,14 +263,14 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     const responseText = clusterResponse.text;
     if (!responseText) throw new Error("Received empty response during clustering.");
     thematicClusters = JSON.parse(responseText.trim()).thematic_clusters;
-    console.log(`Agent 1 complete. Identified ${thematicClusters.length} thematic clusters.`);
+    options.sendEvent({ type: 'progress', message: `Agente 1 completo. Identificati ${thematicClusters.length} cluster tematici.` });
   } catch (e) {
     const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
     throw new Error(`Agent 1 (Information Architect) failed. Error: ${detailedError}`);
   }
 
   // --- AGENT 2: SEMANTIC LINKING STRATEGIST ---
-  console.log("Master Agent deploying Agent 2: Semantic Linking Strategist...");
+  options.sendEvent({ type: 'progress', message: "Agente 2: Lo Stratega Semantico sta generando suggerimenti di link..." });
   let suggestionPrompt = `
     Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}".
     
@@ -407,14 +409,14 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
             }
         }) as Suggestion);
     }
-      console.log(`Agent 2 complete. Generated ${reportSuggestions.length} linking suggestions based on "${strategy}" strategy.`);
+      options.sendEvent({ type: 'progress', message: `Agente 2 completo. Generati ${reportSuggestions.length} suggerimenti basati sulla strategia "${strategy}".` });
   } catch(e) {
       const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
       throw new Error(`Agent 2 (Semantic Linking Strategist) failed. Error: ${detailedError}`);
   }
 
   // --- AGENT 3: CONTENT STRATEGIST ---
-  console.log("Master Agent deploying Agent 3: Content Strategist...");
+  options.sendEvent({ type: 'progress', message: "Agente 3: Il Content Strategist sta cercando 'content gap'..." });
   const contentGapPrompt = `
     Agisci come un SEO Content Strategist di livello mondiale per "${options.site_root}".
 
@@ -469,7 +471,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
         const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
 
         if (options.seozoomApiKey && parsedSuggestions.length > 0) {
-            console.log(`Agent 3 complete. Identified ${parsedSuggestions.length} content opportunities. Enriching with SEOZoom data...`);
+            options.sendEvent({ type: 'progress', message: `Arricchimento dei dati con SEOZoom per ${parsedSuggestions.length} opportunità...` });
             
             const enrichmentPromises = parsedSuggestions.map(async (suggestion: ContentGapSuggestion) => {
                 if (suggestion.target_query) {
@@ -490,19 +492,21 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
             });
 
             contentGapSuggestions = await Promise.all(enrichmentPromises);
-            console.log("SEOZoom enrichment complete.");
+            options.sendEvent({ type: 'progress', message: "Arricchimento SEOZoom completo." });
         } else {
             contentGapSuggestions = parsedSuggestions;
-            console.log(`Agent 3 complete. Identified ${contentGapSuggestions.length} content opportunities.`);
+            options.sendEvent({ type: 'progress', message: `Agente 3 completo. Identificate ${contentGapSuggestions.length} opportunità di contenuto.` });
         }
     }
   } catch(e) {
       console.error("Error during Content Gap Analysis phase:", e);
       const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
       // Non bloccare l'intero report se solo questa fase fallisce
-      console.warn(`Agent 3 (Content Strategist) failed. Proceeding without content gaps. Error: ${detailedError}`);
+      options.sendEvent({ type: 'progress', message: `Agente 3 (Content Strategist) fallito. Procedo senza content gap. Errore: ${detailedError}` });
   }
   
+  options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
+
   const finalReport: Report = {
     site: options.site_root,
     gscSiteUrl: options.gscSiteUrl,
@@ -523,8 +527,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     }
   };
   
-  console.log("Master Agent finished. Returning final report.");
-  return finalReport;
+  options.sendEvent({ type: 'done', payload: finalReport });
 }
 
 export async function deepAnalysisFlow(options: {
