@@ -4,13 +4,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// This function can be shared or replicated from the GSC callback
-const renderErrorPage = (title: string, message: string, rawError?: any) => {
-  const rawErrorHtml = rawError && Object.keys(rawError).length > 0
-    ? `<h3>Dati di Errore Grezzi da Google</h3>
-       <p>Questa è la risposta esatta ricevuta dal server di Google, senza filtri. La vera causa dell'errore si trova qui.</p>
-       <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>` 
-    : '';
+// This is the new, enhanced diagnostic page renderer.
+const renderErrorPage = (title: string, message: string, rawError?: any, redirectUri?: string) => {
+  let specificDiagnosis = '';
+  
+  if (rawError?.error === 'redirect_uri_mismatch' && redirectUri) {
+    specificDiagnosis = `
+        <h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
+        <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento inviato dalla nostra applicazione non è presente nell'elenco degli URI autorizzati nella tua Google Cloud Console.</p>
+        <p class="azione"><b>AZIONE RICHIESTA:</b></p>
+        <ol>
+            <li>Copia il seguente URI. È l'indirizzo esatto che la nostra app sta usando in questo momento:</li>
+            <li class="code-box"><code>${redirectUri}</code></li>
+            <li>Vai alla tua <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">pagina delle credenziali di Google Cloud</a>.</li>
+            <li>Seleziona il tuo progetto e clicca sul nome del tuo <b>ID client OAuth 2.0</b>.</li>
+            <li>Nella sezione "URI di reindirizzamento autorizzati", clicca su "AGGIUNGI URI".</li>
+            <li>Incolla l'URI che hai copiato.</li>
+            <li>Salva le modifiche e prova a ricollegarti.</li>
+        </ol>
+        <p class="nota"><b>Nota:</b> Devi aggiungere questo URI per ogni ambiente che usi (es. localhost, produzione, URL di anteprima di Vercel).</p>
+    `;
+  } else if (rawError?.error) {
+     specificDiagnosis = `<h3>Dati di Errore Grezzi da Google</h3>
+       <p>Questa è la risposta esatta ricevuta dal server di Google. La causa dell'errore si trova qui.</p>
+       <pre><code>${JSON.stringify(rawError, null, 2)}</code></pre>`;
+  }
 
   return new Response(
     `<!DOCTYPE html>
@@ -20,35 +38,42 @@ const renderErrorPage = (title: string, message: string, rawError?: any) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${title}</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; line-height: 1.6; background-color: #f8fafc; color: #1e293b; padding: 2rem; }
-        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; text-align: left; }
-        h1 { color: #b91c1c; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
-        h3 { margin-top: 2rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;}
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; background-color: #f8fafc; color: #1e293b; padding: 1rem; }
+        .container { max-width: 800px; margin: 2rem auto; background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; text-align: left; }
+        h1 { color: #b91c1c; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; }
+        h3 { margin-top: 2rem; border-top: 1px solid #e2e8f0; padding-top: 1rem; font-size: 1.1rem;}
         p { margin-bottom: 1rem; }
-        ul { margin-left: 1.5rem; margin-bottom: 1rem; }
+        ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+        li { margin-bottom: 0.5rem; }
         code { background-color: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #475569; user-select: all; word-break: break-all; }
         pre { background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+        .azione { font-weight: 600; color: #0f172a; }
+        .code-box { list-style: none; background-color: #f1f5f9; padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0; }
+        .nota { font-size: 0.875rem; color: #475569; border-left: 3px solid #64748b; padding-left: 1rem; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
       </style>
     </head>
     <body>
       <div class="container">
         <h1><span style="font-size: 1.5rem;">🚨</span> ${title}</h1>
         <div>${message}</div>
-        ${rawErrorHtml}
+        ${specificDiagnosis}
       </div>
     </body>
     </html>`,
     {
-      status: 500,
+      status: 400, // Bad Request is more appropriate for config errors
       headers: { 'Content-Type': 'text/html' },
     }
   );
 };
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const code = searchParams.get('code');
-  const error = searchParams.get('error');
+  const url = new URL(req.url);
+  const code = url.searchParams.get('code');
+  const error = url.searchParams.get('error');
+  const redirectUri = `${url.origin}/api/ga4/callback`;
 
   if (error) {
     console.error('Google OAuth Error (GA4):', error);
@@ -69,14 +94,11 @@ export async function GET(req: NextRequest) {
     return renderErrorPage('Errore di Configurazione del Server', errorMessage);
   }
 
-  const url = new URL(req.url);
-  const redirectUri = `${url.origin}/api/ga4/callback`;
-
   try {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri
+      redirectUri // The dynamically generated URI must be used here too
     );
 
     const { tokens } = await oauth2Client.getToken(code);
@@ -98,20 +120,13 @@ export async function GET(req: NextRequest) {
     console.error('Raw error during Google Token exchange (GA4):', err);
     
     const errorResponse = err.response?.data || {};
-    let message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso GA4.</p>`;
+    const message = `<p>Si è verificato un errore durante la comunicazione con i server di Google per scambiare il codice di autorizzazione con un token di accesso GA4.</p>`;
     
-    if (errorResponse.error === 'redirect_uri_mismatch') {
-        message += `<h3>Diagnosi Specifica: <code>redirect_uri_mismatch</code></h3>
-                    <p>Google sta rifiutando la richiesta perché l'URI di reindirizzamento non corrisponde a quello autorizzato nella tua Google Cloud Console.</p>
-                    <p><b>URI inviato da questa applicazione:</b> <code>${redirectUri}</code>. Assicurati che questo esatto valore sia presente negli "URI di reindirizzamento autorizzati" del tuo client OAuth.</p>`;
-    } else {
-        message += `<p>Controlla la configurazione del tuo client OAuth nella Google Cloud Console.</p>`;
-    }
-
     return renderErrorPage(
-        'Errore di Autenticazione GA4 (Diagnosi Avanzata)', 
+        'Errore di Autenticazione GA4 (Configurazione Guidata)', 
         message,
-        errorResponse
+        errorResponse,
+        redirectUri // Pass the URI to the renderer
     );
   }
 }
