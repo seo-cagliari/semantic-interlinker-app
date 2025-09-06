@@ -8,7 +8,7 @@ import { GscConnect } from './GscConnect';
 import { BrainCircuitIcon, LoadingSpinnerIcon, XCircleIcon } from './Icons';
 import { ProgressReportModal } from './ProgressReportModal';
 import useLocalStorage from '../hooks/useLocalStorage';
-import ReportDisplay from './ReportDisplay';
+import { ReportDisplay } from './ReportDisplay';
 
 const loadingMessages = [
   "Avvio dell'analisi strategica...",
