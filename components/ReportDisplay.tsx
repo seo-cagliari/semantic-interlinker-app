@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
 import ReportView from './ReportView';
@@ -28,7 +27,14 @@ interface ReportDisplayProps {
 }
 
 const ReportDisplay = (props: ReportDisplayProps) => {
-  const { report, sortedPages, savedReport, isProgressLoading, onProgressCheck, onNewAnalysis, onAnalyzeFromHub, selectedSuggestions, onViewJson, onViewModification, onToggleSelection, selectedDeepAnalysisUrl, onSetSelectedDeepAnalysisUrl, onDeepAnalysis, isDeepLoading, deepError, deepAnalysisReport } = props;
+  const {
+    savedReport,
+    isProgressLoading,
+    onProgressCheck,
+    onNewAnalysis,
+    report,
+    ...reportViewProps
+  } = props;
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
   return (
@@ -92,7 +98,7 @@ const ReportDisplay = (props: ReportDisplayProps) => {
         </div>
       </div>
 
-      {viewMode === 'report' ? <ReportView {...props} /> : <VisualizerView report={report} />}
+      {viewMode === 'report' ? <ReportView report={report} {...reportViewProps} /> : <VisualizerView report={report} />}
     </div>
   );
 };
