@@ -25,9 +25,13 @@ const loadingMessages = [
 
 const DashboardClient = () => {
   const [site, setSite] = useLocalStorage<string | null>('semantic-interlinker-site', null);
-  const [savedReport, setSavedReport] = useLocalStorage<SavedReport | null>(site ? `semantic-interlinker-report-${site}` : null, null);
-
-  const [report, setReport] = useState<Report | null>(savedReport?.report || null);
+  
+  // `savedReport` holds the report data from localStorage, managed via a dedicated effect to avoid hydration errors.
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
+  
+  // `report` is the currently active/displayed report. It can be from storage or a new analysis.
+  const [report, setReport] = useState<Report | null>(null);
+  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -53,6 +57,34 @@ const DashboardClient = () => {
   const [isProgressModalOpen, setIsProgressModalOpen] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // This effect synchronizes `savedReport` and `report` from localStorage when the `site` changes.
+  useEffect(() => {
+    if (site) {
+      const key = `semantic-interlinker-report-${site}`;
+      const item = window.localStorage.getItem(key);
+      if (item) {
+        try {
+          const parsed = JSON.parse(item) as SavedReport;
+          setSavedReport(parsed);
+          setReport(parsed.report);
+        } catch (error) {
+          console.error(`Error reading or parsing saved report for site ${site}:`, error);
+          window.localStorage.removeItem(key); // Clean up corrupted data
+          setSavedReport(null);
+          setReport(null);
+        }
+      } else {
+        // No report found in storage for this site, ensure states are clean.
+        setSavedReport(null);
+        setReport(null);
+      }
+    } else {
+      // No site is selected, ensure states are clean.
+      setSavedReport(null);
+      setReport(null);
+    }
+  }, [site]);
   
   const sortedPageDiagnostics = useMemo(() => {
     if (!report?.page_diagnostics) return [];
@@ -61,13 +93,14 @@ const DashboardClient = () => {
 
 
   useEffect(() => {
-     if (savedReport) {
-        setReport(savedReport.report);
-         if (sortedPageDiagnostics.length > 0) {
-            setSelectedDeepAnalysisUrl(sortedPageDiagnostics[0].url);
-          }
-     }
-  }, [savedReport, sortedPageDiagnostics]);
+    if (report && sortedPageDiagnostics.length > 0 && !selectedDeepAnalysisUrl) {
+      // If a report is loaded and no URL is selected yet, default to the top page
+      setSelectedDeepAnalysisUrl(sortedPageDiagnostics[0].url);
+    } else if (!report) {
+      // If the report is cleared, clear the selected URL
+      setSelectedDeepAnalysisUrl('');
+    }
+  }, [report, sortedPageDiagnostics, selectedDeepAnalysisUrl]);
   
   useEffect(() => {
     const cleanup = () => {
@@ -143,10 +176,15 @@ const DashboardClient = () => {
         }
         
         const responseData: Report = await apiResponse.json();
-        const reportToSave: SavedReport = { report: responseData, timestamp: Date.now() };
+        const newSavedReport: SavedReport = { report: responseData, timestamp: Date.now() };
         
+        // Update localStorage first
+        const key = `semantic-interlinker-report-${siteUrl}`;
+        window.localStorage.setItem(key, JSON.stringify(newSavedReport));
+
+        // Then update the state. `setSite` will trigger the useEffect to re-read, but we also set state directly for immediate UI update.
         setSite(siteUrl);
-        setSavedReport(reportToSave);
+        setSavedReport(newSavedReport);
         setReport(responseData);
 
     } catch (err) {
@@ -160,7 +198,7 @@ const DashboardClient = () => {
         setIsLoading(false);
         abortControllerRef.current = null;
     }
-  }, [setSite, setSavedReport]);
+  }, [setSite]);
 
   const handleDeepAnalysis = useCallback(async (urlToAnalyze?: string) => {
     const finalUrl = urlToAnalyze || selectedDeepAnalysisUrl;
@@ -238,11 +276,15 @@ const DashboardClient = () => {
   }, [savedReport]);
   
   const handleNewAnalysis = () => {
-    setReport(null);
+    // Clear storage for the current site
+    if (site) {
+        const key = `semantic-interlinker-report-${site}`;
+        window.localStorage.removeItem(key);
+    }
+    // Clear component state. `setSite(null)` will trigger a cleanup effect.
+    setSite(null);
     setError(null);
     setDeepAnalysisReport(null);
-    setSavedReport(null);
-    setSite(null);
   };
 
   const handleViewJson = useCallback((suggestion: Suggestion) => {
