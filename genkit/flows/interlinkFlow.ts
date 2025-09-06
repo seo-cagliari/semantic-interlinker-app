@@ -193,10 +193,22 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
 
 
   // PHASE 0: AUTHORITY & OPPORTUNITY CALCULATION
-  options.sendEvent({ type: 'progress', message: "Fase 0: Calcolo Autorità Interna e Opportunità di Crescita..." });
-  const allPagesWithContent = await wp.getAllPublishedPages(options.site_root);
-  options.sendEvent({ type: 'progress', message: `Recuperate ${allPagesWithContent.length} pagine e articoli. Ora analizzo i link interni...` });
-  const internalLinksMap = await wp.getAllInternalLinksFromAllPages(options.site_root, allPagesWithContent);
+  options.sendEvent({ type: 'progress', message: "Fase 0: Scansione del sito e calcolo dell'autorità..." });
+  const pageProgressCallback = (message: string) => {
+    options.sendEvent({ type: 'progress', message });
+  };
+  const allPagesWithContent = await wp.getAllPublishedPages(options.site_root, pageProgressCallback);
+  
+  options.sendEvent({ type: 'progress', message: `Recuperate ${allPagesWithContent.length} pagine. Inizio analisi dei link interni...` });
+  const internalLinksMap = await wp.getAllInternalLinksFromAllPages(
+    options.site_root, 
+    allPagesWithContent,
+    (processed, total) => {
+        options.sendEvent({ type: 'progress', message: `Analisi link interni: ${processed} / ${total} pagine...` });
+    }
+  );
+  
+  options.sendEvent({ type: 'progress', message: `Calcolo Punteggi di Autorità Interna...` });
   const pagesWithScores = calculateInternalAuthority(
       internalLinksMap,
       allPagesWithContent.map(p => ({ url: p.link, title: p.title }))

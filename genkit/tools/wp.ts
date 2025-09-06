@@ -1,7 +1,13 @@
+
 import { Suggestion } from '../../types';
 
 // Helper to fetch all items from a paginated WP endpoint
-const fetchAllPaginated = async (endpoint: string, headers: HeadersInit, fields: string): Promise<any[]> => {
+const fetchAllPaginated = async (
+    endpoint: string, 
+    headers: HeadersInit, 
+    fields: string,
+    onProgress?: (fetchedCount: number, totalPages: number) => void
+): Promise<any[]> => {
     let allItems: any[] = [];
     let page = 1;
     const perPage = 100; // Max allowed by WP REST API
@@ -24,6 +30,10 @@ const fetchAllPaginated = async (endpoint: string, headers: HeadersInit, fields:
             allItems = allItems.concat(items);
         }
         
+        if (onProgress) {
+            onProgress(page, totalPages);
+        }
+        
         if (!totalPagesHeader && items.length < perPage) {
             break; // Exit if there are no more pages
         }
@@ -40,7 +50,10 @@ const stripHtml = (html: string): string => {
 };
 
 export const wp = {
-  async getAllPublishedPages(siteRoot: string): Promise<{ link: string; title: string; content: string }[]> {
+  async getAllPublishedPages(
+    siteRoot: string,
+    onProgress?: (message: string) => void
+  ): Promise<{ link: string; title: string; content: string }[]> {
     console.log(`Fetching all pages and posts with content from ${siteRoot}`);
     const WP_URL = siteRoot.replace(/\/$/, '');
     const headers = { 'Content-Type': 'application/json' };
@@ -50,10 +63,15 @@ export const wp = {
         const postsEndpoint = `${WP_URL}/wp-json/wp/v2/posts`;
         const pagesEndpoint = `${WP_URL}/wp-json/wp/v2/pages`;
 
-        const [posts, pages] = await Promise.all([
-            fetchAllPaginated(postsEndpoint, headers, fields),
-            fetchAllPaginated(pagesEndpoint, headers, fields)
-        ]);
+        if (onProgress) onProgress("Inizio recupero degli articoli...");
+        const posts = await fetchAllPaginated(postsEndpoint, headers, fields, (page, total) => {
+            if (onProgress) onProgress(`Recupero articoli: pagina ${page} di ${total}...`);
+        });
+
+        if (onProgress) onProgress("Inizio recupero delle pagine...");
+        const pages = await fetchAllPaginated(pagesEndpoint, headers, fields, (page, total) => {
+            if (onProgress) onProgress(`Recupero pagine: pagina ${page} di ${total}...`);
+        });
 
         const allItems = [...posts, ...pages].map(item => ({
             link: item.link,
@@ -62,6 +80,7 @@ export const wp = {
         }));
         
         console.log(`Successfully fetched ${allItems.length} pages/posts with content.`);
+        if (onProgress) onProgress(`Trovati ${allItems.length} articoli e pagine totali.`);
         return allItems;
 
     } catch(error) {
@@ -71,15 +90,21 @@ export const wp = {
     }
   },
 
-  async getAllInternalLinksFromAllPages(siteRoot: string, allPages: { link: string; content: string }[]): Promise<Record<string, string[]>> {
+  async getAllInternalLinksFromAllPages(
+    siteRoot: string, 
+    allPages: { link: string; content: string }[],
+    onProgress?: (processed: number, total: number) => void
+  ): Promise<Record<string, string[]>> {
     console.log(`Parsing ${allPages.length} pages to map internal links.`);
     const internalLinksMap: Record<string, string[]> = {};
     const siteUrl = new URL(siteRoot);
     const siteDomain = siteUrl.hostname;
+    const total = allPages.length;
 
     const hrefRegex = /<a\s+(?:[^>]*?\s+)?href="([^"]*)"/gi;
 
-    for (const page of allPages) {
+    for (let i = 0; i < total; i++) {
+        const page = allPages[i];
         const sourceUrl = page.link;
         const outboundLinks = new Set<string>();
         let match;
@@ -103,8 +128,18 @@ export const wp = {
             }
         }
         internalLinksMap[sourceUrl] = Array.from(outboundLinks);
+        
+        // Report progress periodically to avoid flooding with updates
+        if (onProgress && (i + 1) % 25 === 0) {
+            onProgress(i + 1, total);
+        }
     }
     
+    // Final progress update
+    if (onProgress) {
+        onProgress(total, total);
+    }
+
     console.log(`Internal link map created for ${Object.keys(internalLinksMap).length} pages.`);
     return internalLinksMap;
   },
