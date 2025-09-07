@@ -333,6 +333,8 @@ export default function DashboardClient() {
     if (currentSerpApiKey !== serpApiKey) {
         setSerpApiKey(currentSerpApiKey);
     }
+    
+    let analysisCompletedSuccessfully = false;
 
     try {
         const response = await fetch('/api/topical-authority', {
@@ -372,6 +374,7 @@ export default function DashboardClient() {
               if (event.type === 'progress') {
                 setTopicalAuthorityLoadingMessage(event.message);
               } else if (event.type === 'done') {
+                analysisCompletedSuccessfully = true;
                 const roadmap: TopicalAuthorityRoadmap = event.payload;
                 setSavedReport(prev => {
                     if (!prev) return null;
@@ -385,6 +388,10 @@ export default function DashboardClient() {
               console.error("Failed to parse topical authority stream chunk:", line, e);
             }
           }
+        }
+
+        if (!analysisCompletedSuccessfully) {
+            throw new Error("La connessione con il server si è interrotta inaspettatamente. Il processo di analisi potrebbe aver superato i limiti di tempo o di memoria del server. Riprova o contatta il supporto se il problema persiste.");
         }
 
     } catch (err) {
