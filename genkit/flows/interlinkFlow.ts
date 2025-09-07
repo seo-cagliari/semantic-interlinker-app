@@ -199,7 +199,7 @@ ${options.gscData!.length > 200 ? `(e altri ${options.gscData!.length - 200} rec
 Formato: 'pagePath', 'sessions', 'engagementRate', 'conversions'
 ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}
 `
-    : "Non sono stati forniti dati da Google Analytics 4. Basa la tua analisi comportamentale solo sui dati GSC.";
+    : "Non sono stati forniti dati da Google Analytics 4.";
 
 
   // PHASE 0: AUTHORITY & OPPORTUNITY CALCULATION

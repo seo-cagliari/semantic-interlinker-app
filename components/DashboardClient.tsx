@@ -330,7 +330,7 @@ export default function DashboardClient() {
             body: JSON.stringify({
                 site_root: report.site,
                 thematic_clusters: report.thematic_clusters,
-                page_diagnostics: report.page_diagnostics,
+                page_diagnostics: report.page_diagnostics, // Invia tutti i titoli di pagina
                 strategicContext: strategicContext,
             })
         });
