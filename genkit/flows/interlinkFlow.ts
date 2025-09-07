@@ -735,6 +735,10 @@ export async function topicalAuthorityFlow(options: {
   // --- AGENT 4.1: PILLAR DISCOVERY AGENT ---
   sendEvent({ type: 'progress', message: "Agente 4.1: Il Consulente di Business sta identificando i Pillar strategici..." });
   
+  const geoFocusPromptPart = strategicContext.geographic_focus
+    ? `\n- Focus Geografico Primario: "${strategicContext.geographic_focus}". Considera questo focus nel definire i pillar, specialmente per argomenti come "SEO Locale".`
+    : '';
+
   const pillarDiscoveryPrompt = `
     Sei un consulente di business e SEO strategist di altissimo livello. Il tuo compito è identificare i 2-5 "Pillar" tematici strategici per il sito ${site_root}, basandoti sugli obiettivi di business e sui contenuti esistenti.
 
@@ -743,6 +747,7 @@ export async function topicalAuthorityFlow(options: {
     - Intento dell'utente target (Central Intent): "${strategicContext.central_intent}"
     - Cluster tematici attuali: ${thematic_clusters.map(c => `"${c.cluster_name}"`).join(', ')}
     - Titoli di tutte le pagine del sito: ${page_diagnostics.map(p => `"${p.title}"`).join(', ')}
+    ${geoFocusPromptPart}
 
     PROCESSO DECISIONALE IN 4 PASSI:
     1. PARTI DAL BUSINESS, NON DAI CONTENUTI: La tua decisione deve essere guidata principalmente dal "Source Context". Chiediti: "Quali 2-5 macro-categorie di servizi o argomenti deve coprire questo sito per raggiungere il suo obiettivo di business?".
@@ -826,6 +831,10 @@ export async function topicalAuthorityFlow(options: {
 
     const existingPagesForPillar = pageToPillarMap[pillar] || [];
 
+    const geoFocusPromptPartForGap = strategicContext.geographic_focus
+      ? `\n- FOCUS GEOGRAFICO: L'analisi deve essere fortemente orientata verso "${strategicContext.geographic_focus}". Quando suggerisci articoli (es. "Migliori Ristoranti"), devono essere contestualizzati a questa località (es. "Migliori Ristoranti a ${strategicContext.geographic_focus}").`
+      : '';
+
     const gapAnalysisPrompt = `
       Sei il massimo esperto mondiale sull'argomento "${pillar}", con una profonda conoscenza della metodologia SEO di Koray Gübür.
       Il tuo compito è creare una roadmap di contenuti per colmare le lacune tematiche del sito ${site_root} per questo specifico Pillar.
@@ -833,6 +842,7 @@ export async function topicalAuthorityFlow(options: {
       CONTESTO DI BUSINESS:
       - Obiettivo (Source Context): "${strategicContext.source_context}"
       - Intento Utente (Central Intent): "${strategicContext.central_intent}"
+      ${geoFocusPromptPartForGap}
 
       PAGINE CHE IL SITO HA GIA' SCRITTO PER QUESTO PILLAR:
       ${existingPagesForPillar.length > 0 ? existingPagesForPillar.join('\n') : "Nessuna pagina esistente trovata per questo Pillar."}

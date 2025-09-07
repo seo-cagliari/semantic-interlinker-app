@@ -14,10 +14,15 @@ export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps)
     const { onGenerate, isLoading, error, loadingMessage } = props;
     const [sourceContext, setSourceContext] = useState('');
     const [centralIntent, setCentralIntent] = useState('');
+    const [geographicFocus, setGeographicFocus] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onGenerate({ source_context: sourceContext, central_intent: centralIntent });
+        onGenerate({ 
+            source_context: sourceContext, 
+            central_intent: centralIntent,
+            geographic_focus: geographicFocus 
+        });
     };
 
     if (isLoading) {
@@ -80,6 +85,17 @@ export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps)
                         className="w-full text-sm px-3 py-2 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         rows={2}
                         placeholder="Descrivi l'obiettivo principale che gli utenti vogliono raggiungere. Esempio: 'Trovare soluzioni efficaci per migliorare il posizionamento su Google' o 'Imparare a cucinare piatti vegani gustosi'."
+                    />
+                </div>
+                 <div>
+                    <label htmlFor="geographic-focus" className="block text-sm font-semibold text-slate-700 mb-1">3. Focus Geografico (Opzionale)</label>
+                     <input
+                        type="text"
+                        id="geographic-focus"
+                        value={geographicFocus}
+                        onChange={(e) => setGeographicFocus(e.target.value)}
+                        className="w-full text-sm px-3 py-2 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Es: 'Cagliari' o 'Sardegna'. Lascia vuoto per un'analisi nazionale."
                     />
                 </div>
                 <div className="text-center pt-4">
@@ -167,9 +183,12 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
         </div>
         
         {strategicContext && (
-             <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm">
+             <div className="mb-8 p-4 bg-slate-50 border border-slate-200 rounded-lg text-sm space-y-1">
                 <p><strong className="font-semibold text-slate-600">Contesto Fonte Analizzato:</strong> <span className="text-slate-800">"{strategicContext.source_context}"</span></p>
-                <p className="mt-1"><strong className="font-semibold text-slate-600">Intento Centrale Analizzato:</strong> <span className="text-slate-800">"{strategicContext.central_intent}"</span></p>
+                <p><strong className="font-semibold text-slate-600">Intento Centrale Analizzato:</strong> <span className="text-slate-800">"{strategicContext.central_intent}"</span></p>
+                {strategicContext.geographic_focus && (
+                    <p><strong className="font-semibold text-slate-600">Focus Geografico Analizzato:</strong> <span className="text-slate-800">"{strategicContext.geographic_focus}"</span></p>
+                )}
             </div>
         )}
 

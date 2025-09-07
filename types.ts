@@ -109,6 +109,7 @@ export type BridgeArticleSuggestion = {
 export type StrategicContext = {
     source_context: string;
     central_intent: string;
+    geographic_focus?: string;
 };
 
 // --- Tipi per l'integrazione GSC ---
