@@ -1,8 +1,10 @@
 
 
 
+
+
 import { topicalAuthorityFlow } from '../../../genkit/flows/interlinkFlow';
-import { ThematicCluster, PageDiagnostic, OpportunityPage, PillarRoadmap } from '../../../types';
+import { ThematicCluster, PageDiagnostic, OpportunityPage, PillarRoadmap, StrategicContext, BridgeArticleSuggestion } from '../../../types';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -25,23 +27,26 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { 
           site_root, 
-          thematic_clusters, 
+          thematic_clusters,
+          strategicContext,
         } = body as {
           site_root: string;
           thematic_clusters: ThematicCluster[];
+          strategicContext: StrategicContext;
         };
 
-        if (!site_root || !thematic_clusters) {
-          throw new Error('site_root and thematic_clusters are required.');
+        if (!site_root || !thematic_clusters || !strategicContext) {
+          throw new Error('site_root, thematic_clusters and strategicContext are required.');
         }
 
-        const roadmaps: PillarRoadmap[] = await topicalAuthorityFlow({
+        const result: { pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] } = await topicalAuthorityFlow({
           site_root,
           thematic_clusters,
+          strategicContext,
           sendEvent,
         });
 
-        sendEvent({ type: 'done', payload: roadmaps });
+        sendEvent({ type: 'done', payload: result });
 
       } catch (error) {
         console.error('API Error in /api/topical-authority stream:', error);

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, PillarRoadmap, ContentBrief, SerpAnalysisResult } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, PillarRoadmap, ContentBrief, SerpAnalysisResult, StrategicContext, BridgeArticleSuggestion } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 import { serpAnalyzer } from '../tools/serp';
@@ -303,7 +303,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   // --- AGENT 2: SEMANTIC LINKING STRATEGIST ---
   options.sendEvent({ type: 'progress', message: "Agente 2: Lo Stratega Semantico sta generando suggerimenti di link..." });
   let suggestionPrompt = `
-    Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}".
+    Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}", seguendo i principi della metodologia Holistic SEO.
     
     CONTESTO:
     1. La struttura del sito è stata organizzata nei seguenti cluster tematici:
@@ -353,17 +353,22 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
 
   suggestionPrompt += `
     ISTRUZIONI AVANZATE (DA APPLICARE A TUTTI I SUGGERIMENTI):
-    1. ANALISI DELL'INTENTO: Per ogni suggerimento, valuta la compatibilità dell'intento di ricerca tra la pagina di origine e quella di destinazione (es. "Ottimo, da informativo a transazionale per guidare l'utente."). Aggiungi un commento su questo nel campo 'intent_alignment_comment'.
-    2. DIAGNOSI CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali.
+    1. CLASSIFICAZIONE PAGINE (Core/Outer): Inferisci la natura strategica delle pagine.
+       - Le pagine 'Core' sono quelle transazionali (servizi, prodotti, contatti) o quelle con alte conversioni in GA4.
+       - Le pagine 'Outer' sono quelle informative (articoli di blog, guide, news).
+       - Dai priorità ai link che vanno da pagine 'Outer' a pagine 'Core' per canalizzare autorità verso la monetizzazione.
+    2. POSIZIONAMENTO STRATEGICO DEL LINK: Per 'insertion_hint', quando un link è strategico (es. Outer -> Core), suggerisci posizioni verso la fine del contenuto per massimizzare la probabilità che venga cliccato dopo che l'utente ha letto il contesto.
+    3. ANALISI DELL'INTENTO: Per ogni suggerimento, valuta la compatibilità dell'intento di ricerca tra la pagina di origine e quella di destinazione (es. "Ottimo, da informativo a transazionale per guidare l'utente."). Aggiungi un commento su questo nel campo 'intent_alignment_comment'.
+    4. DIAGNOSI CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali.
        - Se rilevi un rischio, imposta 'potential_cannibalization' a true. Poi, popola 'cannibalization_details' con:
          - 'competing_queries': un array con le 1-3 query principali per cui competono.
          - 'remediation_steps': un array con 1-2 consigli pratici per risolvere il problema (es. "Differenziare l'intento delle pagine", "Consolidare l'autorità sulla pagina target").
        - Se non c'è rischio, imposta 'potential_cannibalization' a false e lascia 'cannibalization_details' vuoto o nullo.
-    3. USA I DATI COMPORTAMENTALI: Sfrutta i dati GA4 per decisioni strategiche.
+    5. USA I DATI COMPORTAMENTALI: Sfrutta i dati GA4 per decisioni strategiche.
        - Pagine con alto tasso di conversione o engagement sono preziose. Suggerisci link VERSO di esse per capitalizzare sul loro successo.
        - Pagine con molto traffico ma basso engagement o poche conversioni sono 'punti deboli'. Suggerisci link DA esse verso pagine più performanti.
-    4. PUNTEGGIO STRATEGICO: Assegna uno 'score' da 0.0 a 1.0. Un punteggio > 0.75 è per suggerimenti che collegano pagine con alta autorità a pagine con alto potenziale di business (identificate tramite GA4 o query GSC a basso CTR), o che rafforzano significativamente una 'Pillar Page' o 'Money Page' secondo la strategia attiva.
-    5. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
+    6. PUNTEGGIO STRATEGICO: Assegna uno 'score' da 0.0 a 1.0. Un punteggio > 0.75 è per suggerimenti che collegano pagine con alta autorità a pagine con alto potenziale di business (identificate tramite GA4 o query GSC a basso CTR), o che rafforzano significativamente una 'Pillar Page' o 'Money Page' secondo la strategia attiva. Varia gli anchor text e non riutilizzare lo stesso più di 3 volte per pagina.
+    7. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
   `;
 
     const suggestionSchema = {
@@ -607,9 +612,10 @@ export async function contentStrategyFlow(options: {
 export async function topicalAuthorityFlow(options: {
   site_root: string;
   thematic_clusters: ThematicCluster[];
+  strategicContext: StrategicContext;
   sendEvent: (event: object) => void;
-}): Promise<PillarRoadmap[]> {
-    const { site_root, thematic_clusters, sendEvent } = options;
+}): Promise<{ pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] }> {
+    const { site_root, thematic_clusters, strategicContext, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const onRetryCallback = (attempt: number, delay: number) => {
@@ -674,9 +680,10 @@ export async function topicalAuthorityFlow(options: {
                   type: Type.OBJECT,
                   properties: {
                     title: { type: Type.STRING },
-                    target_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    target_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    section_type: { type: Type.STRING, description: "'Core' o 'Outer'" },
                   },
-                  required: ["title", "target_queries"]
+                  required: ["title", "target_queries", "section_type"]
                 }
               }
             },
@@ -690,7 +697,6 @@ export async function topicalAuthorityFlow(options: {
     for (const pillar of strategicPillars) {
         sendEvent({ type: 'progress', message: `Analisi Gap per il Pillar: "${pillar}"...` });
         
-        // Find all pages related to this pillar
         const relevantClusters = thematic_clusters.filter(c => 
             c.cluster_name.toLowerCase().includes(pillar.toLowerCase()) || 
             pillar.toLowerCase().includes(c.cluster_name.toLowerCase())
@@ -698,26 +704,30 @@ export async function topicalAuthorityFlow(options: {
         const pillarPages = [...new Set(relevantClusters.flatMap(c => c.pages))];
 
         const gapAnalysisPrompt = `
-          Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority per il sito "${site_root}".
+          Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority (metodologia Koray Gübür) per il sito "${site_root}".
           
           IL TUO COMPITO:
-          Eseguire un'analisi approfondita dei gap di contenuto per il **Pillar strategico: "${pillar}"**.
+          Eseguire un'analisi dei gap di contenuto per il Pillar: "${pillar}", tenendo conto del contesto strategico del business.
           
-          CONTESTO:
-          1.  **Pagine Attuali del Sito per questo Pillar:**
-              ${pillarPages.length > 0 ? pillarPages.join('\n') : "Nessuna pagina specifica trovata per questo pillar, basati sulla tua conoscenza generale."}
+          CONTESTO STRATEGICO:
+          - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
+          - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"
+
+          PAGINE ATTUALI DEL SITO PER QUESTO PILLAR:
+          ${pillarPages.length > 0 ? pillarPages.join('\n') : "Nessuna pagina specifica trovata."}
 
           ISTRUZIONI DETTAGLIATE:
-          1.  **Costruisci la Mappa Ideale (Mentalmente):** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale e completa per l'argomento "${pillar}". Questa mappa deve coprire tutto, dai concetti fondamentali ("101") agli argomenti più avanzati e di nicchia.
-          2.  **Esegui l'Analisi dei Gap:** Confronta l'elenco delle pagine attuali del sito con la tua mappa ideale. Identifica quali macro-argomenti (cluster) e quali articoli specifici mancano per raggiungere una copertura tematica completa.
-          3.  **Formula la Strategia:**
-              -   Scrivi uno \`strategic_summary\` che riassuma lo stato attuale della copertura del sito per questo pillar e l'importanza strategica di colmare i gap identificati.
-              -   Genera 2-3 \`cluster_suggestions\` mancanti. Per ogni cluster:
-                  -   Scrivi una \`strategic_rationale\` chiara.
-                  -   Suggerisci 2-4 \`article_suggestions\` (titoli di articoli) con le loro \`target_queries\` per costruire quel cluster.
+          1.  **Costruisci la Mappa Ideale:** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale per "${pillar}".
+          2.  **Esegui l'Analisi dei Gap:** Confronta le pagine attuali con la mappa ideale per identificare i cluster e gli articoli mancanti.
+          3.  **Formula la Strategia e Classifica:**
+              -   Scrivi uno \`strategic_summary\` che riassuma lo stato attuale e l'importanza strategica di colmare i gap.
+              -   Genera 2-3 \`cluster_suggestions\` mancanti.
+              -   Per ogni \`article_suggestion\`, **classificalo strategicamente** impostando \`section_type\`:
+                  -   \`'Core'\`: se l'articolo è direttamente collegato al Source Context (monetizzazione, servizi, prodotti).
+                  -   \`'Outer'\`: se l'articolo è di supporto, informativo e mira a costruire fiducia e dati storici.
 
           REGOLE FINALI:
-          - Sii profondo e strategico. Non suggerire argomenti banali se il sito sembra già avanzato.
+          - Sii profondo e strategico.
           - La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
         `;
 
@@ -738,9 +748,70 @@ export async function topicalAuthorityFlow(options: {
             }
         } catch(e) {
             console.error(`Gap Analysis failed for pillar "${pillar}"`, e);
-            // Continue to the next pillar even if one fails
         }
     }
+    
+    // --- AGENT 4.3: CONTEXTUAL BRIDGE BUILDER ---
+    let bridgeSuggestions: BridgeArticleSuggestion[] = [];
+    if (strategicPillars.length > 1) {
+        sendEvent({ type: 'progress', message: "Architetto dei Ponti Contestuali: Sto cercando connessioni tra i Pillar..." });
+        
+        try {
+            const bridgeBuilderPrompt = `
+                Agisci come un "Architetto di Ponti Contestuali" per il sito "${site_root}".
+                
+                CONTESTO STRATEGICO:
+                -   Pillar di Business Identificati: ${strategicPillars.join(', ')}
+                -   Source Context (Obiettivo di Business): "${strategicContext.source_context}"
+
+                IL TUO COMPITO:
+                Identifica e suggerisci 1-2 articoli "ponte" ad alto valore strategico. Un articolo "ponte" è un contenuto che collega logicamente e semanticamente due Pillar diversi, unificando l'autorità del dominio e mostrando una competenza olistica.
+
+                ESEMPIO:
+                -   Pillars: "Consulenza SEO", "Realizzazione Siti Web"
+                -   Articolo Ponte Suggerito: "Come un Web Design Efficace Impatta Direttamente sulla SEO Tecnica e sul Posizionamento"
+
+                ISTRUZIONI:
+                -   Analizza le possibili sovrapposizioni tra i pillar forniti.
+                -   Suggerisci articoli che rispondano a intenti di ricerca complessi che si trovano all'intersezione di due pillar.
+                -   La tua risposta DEVE essere un oggetto JSON.
+            `;
+            const bridgeBuilderSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    bridge_suggestions: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING },
+                                description: { type: Type.STRING, description: "Spiega perché questo articolo è un buon ponte strategico." },
+                                connecting_pillars: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 2, maxItems: 2 },
+                                target_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
+                            },
+                            required: ["title", "description", "connecting_pillars", "target_queries"]
+                        }
+                    }
+                }
+            };
+
+            const bridgeResponse = await generateContentWithRetry(ai, {
+                model: "gemini-2.5-flash",
+                contents: bridgeBuilderPrompt,
+                config: { responseMimeType: "application/json", responseSchema: bridgeBuilderSchema, seed: 42 },
+            }, 4, 1000, onRetryCallback);
+
+            const responseText = bridgeResponse.text;
+            if (responseText) {
+                bridgeSuggestions = JSON.parse(responseText.trim()).bridge_suggestions;
+                sendEvent({ type: 'progress', message: `Trovati ${bridgeSuggestions.length} ponti contestuali.` });
+            }
+        } catch (e) {
+            console.error(`Contextual Bridge Builder failed`, e);
+            // Non bloccare il flusso se questo agente fallisce
+        }
+    }
+
 
     if (pillarRoadmaps.length === 0) {
         throw new Error("Impossibile generare la Topical Authority Roadmap per un motivo sconosciuto.");
@@ -748,11 +819,7 @@ export async function topicalAuthorityFlow(options: {
     
     sendEvent({ type: 'progress', message: `Analisi completata. Compilazione della roadmap finale.` });
 
-    // The function now returns an array of PillarRoadmap, but the old signature expected a single object.
-    // The API route will handle the array and the client will receive it.
-    // However, the function signature must match its return value.
-    // The calling function (in the API route) needs to be aware of this change.
-    return pillarRoadmaps;
+    return { pillarRoadmaps, bridgeSuggestions };
 }
 
 

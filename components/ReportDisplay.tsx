@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
+import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion, StrategicContext } from '../types';
 import VisualizerView from './VisualizerView';
 import { ReportView } from './ReportView';
 import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon, LinkIcon, LightBulbIcon, BeakerIcon, LayoutDashboardIcon, XCircleIcon, BrainCircuitIcon, MapIcon } from './Icons';
@@ -33,7 +33,7 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
-  onGenerateTopicalAuthority: () => void;
+  onGenerateTopicalAuthority: (context: StrategicContext) => void;
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;
@@ -205,7 +205,11 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
 
             <TabsContent value="topical_authority">
                 {report.pillar_roadmaps ? (
-                    <TopicalAuthorityRoadmap roadmaps={report.pillar_roadmaps} />
+                    <TopicalAuthorityRoadmap 
+                        roadmaps={report.pillar_roadmaps} 
+                        bridgeSuggestions={report.contextual_bridges}
+                        strategicContext={report.strategic_context}
+                    />
                 ) : (
                    <TopicalAuthorityGenerator
                         onGenerate={onGenerateTopicalAuthority}

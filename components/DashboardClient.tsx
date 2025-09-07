@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion, StrategicContext, BridgeArticleSuggestion } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -317,12 +317,12 @@ export default function DashboardClient() {
     }
   }, [savedReport]);
 
-  const handleGenerateTopicalAuthority = useCallback(async () => {
+  const handleGenerateTopicalAuthority = useCallback(async (strategicContext: StrategicContext) => {
     if (!report) return;
 
     setIsTopicalAuthorityLoading(true);
     setTopicalAuthorityError(null);
-    setTopicalAuthorityLoadingMessage("Avvio dello stratega di Topical Authority...");
+    setTopicalAuthorityLoadingMessage("Avvio dell'Architetto di Topical Authority...");
     
     try {
         const response = await fetch('/api/topical-authority', {
@@ -331,6 +331,7 @@ export default function DashboardClient() {
             body: JSON.stringify({
                 site_root: report.site,
                 thematic_clusters: report.thematic_clusters,
+                strategicContext: strategicContext,
             })
         });
 
@@ -358,10 +359,15 @@ export default function DashboardClient() {
               if (event.type === 'progress') {
                 setTopicalAuthorityLoadingMessage(event.message);
               } else if (event.type === 'done') {
-                const roadmaps: PillarRoadmap[] = event.payload;
+                const { pillarRoadmaps, bridgeSuggestions } = event.payload as { pillarRoadmaps: PillarRoadmap[], bridgeSuggestions: BridgeArticleSuggestion[] };
                 setSavedReport(prev => {
                     if (!prev) return null;
-                    const updatedReport: Report = { ...prev.report, pillar_roadmaps: roadmaps };
+                    const updatedReport: Report = { 
+                        ...prev.report, 
+                        pillar_roadmaps: pillarRoadmaps,
+                        contextual_bridges: bridgeSuggestions,
+                        strategic_context: strategicContext
+                    };
                     return { ...prev, report: updatedReport };
                 });
               } else if (event.type === 'error') {

@@ -1,6 +1,8 @@
 
 
 
+
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -78,6 +80,7 @@ export type ContentBrief = {
 export type TopicalArticleSuggestion = {
   title: string;
   target_queries: string[];
+  section_type: 'Core' | 'Outer';
   content_brief?: ContentBrief;
 };
 
@@ -95,6 +98,17 @@ export type PillarRoadmap = {
   cluster_suggestions: TopicalClusterSuggestion[];
 };
 
+export type BridgeArticleSuggestion = {
+  title: string;
+  description: string;
+  connecting_pillars: [string, string];
+  target_queries: string[];
+};
+
+export type StrategicContext = {
+    source_context: string;
+    central_intent: string;
+};
 
 // --- Tipi per l'integrazione GSC ---
 export type GscSite = {
@@ -238,6 +252,8 @@ export type Report = {
   page_diagnostics: PageDiagnostic[];
   opportunity_hub?: OpportunityPage[];
   pillar_roadmaps?: PillarRoadmap[];
+  contextual_bridges?: BridgeArticleSuggestion[];
+  strategic_context?: StrategicContext;
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   gscData?: GscDataRow[];
   ga4Data?: Ga4DataRow[];
