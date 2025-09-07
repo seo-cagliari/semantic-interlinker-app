@@ -209,19 +209,22 @@ export default function DashboardClient() {
 
           for (const line of lines) {
             if (line.trim() === '') continue;
+            let event;
             try {
-              const event = JSON.parse(line);
-              if (event.type === 'progress') {
-                setLoadingMessage(event.message);
-              } else if (event.type === 'done') {
-                const newSavedReport: SavedReport = { report: event.payload, timestamp: Date.now() };
-                setSavedReport(newSavedReport);
-                setView('report');
-              } else if (event.type === 'error') {
-                throw new Error(event.details || event.error);
-              }
+              event = JSON.parse(line);
             } catch (e) {
               console.error("Failed to parse stream chunk as JSON:", line, e);
+              continue;
+            }
+            
+            if (event.type === 'error') {
+              throw new Error(event.details || event.error);
+            } else if (event.type === 'progress') {
+              setLoadingMessage(event.message);
+            } else if (event.type === 'done') {
+              const newSavedReport: SavedReport = { report: event.payload, timestamp: Date.now() };
+              setSavedReport(newSavedReport);
+              setView('report');
             }
           }
         }
@@ -354,27 +357,30 @@ export default function DashboardClient() {
 
           for (const line of lines) {
             if (line.trim() === '') continue;
+            let event;
             try {
-              const event = JSON.parse(line);
-              if (event.type === 'progress') {
-                setTopicalAuthorityLoadingMessage(event.message);
-              } else if (event.type === 'done') {
-                const { pillarRoadmaps, bridgeSuggestions } = event.payload as { pillarRoadmaps: PillarRoadmap[], bridgeSuggestions: BridgeArticleSuggestion[] };
-                setSavedReport(prev => {
-                    if (!prev) return null;
-                    const updatedReport: Report = { 
-                        ...prev.report, 
-                        pillar_roadmaps: pillarRoadmaps,
-                        contextual_bridges: bridgeSuggestions,
-                        strategic_context: strategicContext
-                    };
-                    return { ...prev, report: updatedReport };
-                });
-              } else if (event.type === 'error') {
-                throw new Error(event.details || event.error);
-              }
+              event = JSON.parse(line);
             } catch (e) {
               console.error("Failed to parse topical authority stream chunk:", line, e);
+              continue;
+            }
+            
+            if (event.type === 'error') {
+              throw new Error(event.details || event.error);
+            } else if (event.type === 'progress') {
+              setTopicalAuthorityLoadingMessage(event.message);
+            } else if (event.type === 'done') {
+              const { pillarRoadmaps, bridgeSuggestions } = event.payload as { pillarRoadmaps: PillarRoadmap[], bridgeSuggestions: BridgeArticleSuggestion[] };
+              setSavedReport(prev => {
+                  if (!prev) return null;
+                  const updatedReport: Report = { 
+                      ...prev.report, 
+                      pillar_roadmaps: pillarRoadmaps,
+                      contextual_bridges: bridgeSuggestions,
+                      strategic_context: strategicContext
+                  };
+                  return { ...prev, report: updatedReport };
+              });
             }
           }
         }
@@ -417,33 +423,36 @@ export default function DashboardClient() {
             let buffer = '';
 
             while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+                const { done, value } = await reader.read();
+                if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
 
-            for (const line of lines) {
-                if (line.trim() === '') continue;
-                try {
-                const event = JSON.parse(line);
-                if (event.type === 'progress') {
-                    setContentStrategyLoadingMessage(event.message);
-                } else if (event.type === 'done') {
-                    const suggestions: ContentGapSuggestion[] = event.payload;
-                    setSavedReport(prev => {
-                        if (!prev) return null;
-                        const updatedReport: Report = { ...prev.report, content_gap_suggestions: suggestions };
-                        return { ...prev, report: updatedReport };
-                    });
-                } else if (event.type === 'error') {
-                    throw new Error(event.details || event.error);
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+                    let event;
+                    try {
+                        event = JSON.parse(line);
+                    } catch (e) {
+                        console.error("Failed to parse content strategy stream chunk:", line, e);
+                        continue;
+                    }
+                    
+                    if (event.type === 'error') {
+                        throw new Error(event.details || event.error);
+                    } else if (event.type === 'progress') {
+                        setContentStrategyLoadingMessage(event.message);
+                    } else if (event.type === 'done') {
+                        const suggestions: ContentGapSuggestion[] = event.payload;
+                        setSavedReport(prev => {
+                            if (!prev) return null;
+                            const updatedReport: Report = { ...prev.report, content_gap_suggestions: suggestions };
+                            return { ...prev, report: updatedReport };
+                        });
+                    }
                 }
-                } catch (e) {
-                console.error("Failed to parse content strategy stream chunk:", line, e);
-                }
-            }
             }
         } catch (err) {
         setContentStrategyError(err instanceof Error ? err.message : 'Si è verificato un errore sconosciuto durante la generazione delle opportunità di contenuto.');
