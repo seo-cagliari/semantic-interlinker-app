@@ -753,6 +753,12 @@ export async function topicalAuthorityFlow(options: {
         sendEvent({ type: 'progress', message: `Agente 4.5 completo. Roadmap arricchita con punteggi e brief.` });
     }
 
+    if (!topicalAuthorityRoadmap) {
+        // Questo caso teoricamente non dovrebbe essere raggiunto grazie alla logica try/catch precedente,
+        // ma soddisfa TypeScript e protegge da risposte vuote/malformate inaspettate dall'AI.
+        throw new Error("Impossibile generare la Topical Authority Roadmap per un motivo sconosciuto.");
+    }
+
     return topicalAuthorityRoadmap;
 }
 
