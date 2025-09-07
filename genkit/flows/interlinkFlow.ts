@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap, TopicalClusterSuggestion, ContentBrief } from '../../types';
 import { wp } from '../tools/wp';
@@ -446,96 +445,6 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
       throw new Error(`Agent 2 (Semantic Linking Strategist) failed. Error: ${detailedError}`);
   }
 
-  // --- AGENT 3: CONTENT STRATEGIST ---
-  options.sendEvent({ type: 'progress', message: "Agente 3: Il Content Strategist sta cercando 'content gap'..." });
-  const contentGapPrompt = `
-    Agisci come un SEO Content Strategist di livello mondiale per "${options.site_root}".
-
-    CONTESTO:
-    1. Cluster tematici del sito:
-    ${JSON.stringify(thematicClusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
-
-    2. Dati di performance da Google Search Console:
-    ${gscDataStringForPrompt}
-    
-    3. Dati Comportamentali da Google Analytics 4:
-    ${ga4DataStringForPrompt}
-
-    IL TUO COMPITO:
-    Identifica le lacune di contenuto strategiche.
-
-    ISTRUZIONI STRATEGICHE:
-    - ANALIZZA LE QUERY DEBOLI: Cerca nei dati GSC le query per cui il sito ha visibilità (impressioni) ma scarso engagement (basso CTR) o per le quali nessuna pagina risponde in modo soddisfacente.
-    - ANALIZZA LE PERFORMANCE COMPORTAMENTALI: Usa i dati GA4 per identificare le pagine 'underperforming'. Se una pagina ha molte impressioni (da GSC) ma un basso tasso di engagement (da GA4), è un'opportunità di contenuto.
-    - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli o migliorino le pagine underperforming, per colmare le lacune di performance e aumentare l'autorità.
-    - Per ogni suggerimento, identifica la principale "target_query" (query di ricerca) che il nuovo contenuto dovrebbe targettizzare.
-    - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
-  `;
-  const contentGapSchema = {
-    type: Type.OBJECT,
-    properties: {
-        content_gap_suggestions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    relevant_cluster: { type: Type.STRING },
-                    target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." }
-                },
-                required: ["title", "description", "relevant_cluster", "target_query"]
-            }
-        }
-    }
-  };
-
-  let contentGapSuggestions: ContentGapSuggestion[] = [];
-  try {
-      const contentGapResponse = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: contentGapPrompt,
-        config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
-    }, 4, 1000, onRetryCallback);
-    const responseText = contentGapResponse.text;
-    if (responseText) {
-        const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
-
-        if (options.seozoomApiKey && parsedSuggestions.length > 0) {
-            options.sendEvent({ type: 'progress', message: `Arricchimento dei dati con SEOZoom per ${parsedSuggestions.length} opportunità...` });
-            
-            const enrichmentPromises = parsedSuggestions.map(async (suggestion: ContentGapSuggestion) => {
-                if (suggestion.target_query) {
-                    try {
-                        const seoData = await seozoom.getKeywordData(suggestion.target_query, options.seozoomApiKey!);
-                        return {
-                            ...suggestion,
-                            search_volume: seoData.search_volume,
-                            keyword_difficulty: seoData.keyword_difficulty,
-                            search_intent: seoData.search_intent,
-                        };
-                    } catch (e) {
-                        console.error(`Failed to enrich suggestion for query "${suggestion.target_query}"`, e);
-                        return suggestion; // Return original suggestion on error
-                    }
-                }
-                return suggestion;
-            });
-
-            contentGapSuggestions = await Promise.all(enrichmentPromises);
-            options.sendEvent({ type: 'progress', message: "Arricchimento SEOZoom completo." });
-        } else {
-            contentGapSuggestions = parsedSuggestions;
-            options.sendEvent({ type: 'progress', message: `Agente 3 completo. Identificate ${contentGapSuggestions.length} opportunità di contenuto.` });
-        }
-    }
-  } catch(e) {
-      console.error("Error during Content Gap Analysis phase:", e);
-      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-      // Non bloccare l'intero report se solo questa fase fallisce
-      options.sendEvent({ type: 'progress', message: `Agente 3 (Content Strategist) fallito. Procedo senza content gap. Errore: ${detailedError}` });
-  }
-
   options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
 
   const finalReport: Report = {
@@ -544,7 +453,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     generated_at: new Date().toISOString(),
     thematic_clusters: thematicClusters,
     suggestions: reportSuggestions,
-    content_gap_suggestions: contentGapSuggestions,
+    content_gap_suggestions: [], // Sarà popolato on-demand
     page_diagnostics: pageDiagnostics,
     opportunity_hub: opportunityHubData,
     internal_links_map: internalLinksMap,
@@ -560,6 +469,130 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
   
   options.sendEvent({ type: 'done', payload: finalReport });
 }
+
+export async function contentStrategyFlow(options: {
+  site_root: string;
+  thematic_clusters: ThematicCluster[];
+  gscData?: GscDataRow[];
+  ga4Data?: Ga4DataRow[];
+  seozoomApiKey?: string;
+  sendEvent: (event: object) => void;
+}): Promise<ContentGapSuggestion[]> {
+    const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, sendEvent } = options;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    
+    const onRetryCallback = (attempt: number, delay: number) => {
+        sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
+    };
+
+    const hasGscData = gscData && gscData.length > 0;
+    const gscDataStringForPrompt = hasGscData
+        ? `Inoltre, hai accesso ai seguenti dati reali di performance da Google Search Console (primi 200 record). Usali come fonte primaria per comprendere l'importanza delle pagine e l'intento dell'utente.
+    Formato: 'query', 'pagina', 'impressioni', 'ctr'
+    ${gscData?.slice(0, 200).map(row => `"${row.keys[0]}", "${row.keys[1]}", ${row.impressions}, ${row.ctr}`).join('\n')}
+    ${gscData!.length > 200 ? `(e altri ${gscData!.length - 200} record)` : ''}
+    `
+        : "Non sono stati forniti dati da Google Search Console. Basa la tua analisi solo sulla struttura del sito.";
+    
+    const hasGa4Data = ga4Data && ga4Data.length > 0;
+    const ga4DataStringForPrompt = hasGa4Data
+        ? `Inoltre, hai accesso ai seguenti dati comportamentali da Google Analytics 4. Usali per valutare il valore strategico delle pagine.
+    Formato: 'pagePath', 'sessions', 'engagementRate', 'conversions'
+    ${ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}
+    `
+        : "Non sono stati forniti dati da Google Analytics 4. Basa la tua analisi comportamentale solo sui dati GSC.";
+
+    // --- AGENT 3: CONTENT STRATEGIST ---
+    sendEvent({ type: 'progress', message: "Agente 3: Il Content Strategist sta cercando 'content gap'..." });
+    const contentGapPrompt = `
+        Agisci come un SEO Content Strategist di livello mondiale per "${site_root}".
+
+        CONTESTO:
+        1. Cluster tematici del sito:
+        ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+
+        2. Dati di performance da Google Search Console:
+        ${gscDataStringForPrompt}
+        
+        3. Dati Comportamentali da Google Analytics 4:
+        ${ga4DataStringForPrompt}
+
+        IL TUO COMPITO:
+        Identifica le lacune di contenuto strategiche.
+
+        ISTRUZIONI STRATEGICHE:
+        - ANALIZZA LE QUERY DEBOLI: Cerca nei dati GSC le query per cui il sito ha visibilità (impressioni) ma scarso engagement (basso CTR) o per le quali nessuna pagina risponde in modo soddisfacente.
+        - ANALIZZA LE PERFORMANCE COMPORTAMENTALI: Usa i dati GA4 per identificare le pagine 'underperforming'. Se una pagina ha molte impressioni (da GSC) ma un basso tasso di engagement (da GA4), è un'opportunità di contenuto.
+        - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli o migliorino le pagine underperforming, per colmare le lacune di performance e aumentare l'autorità.
+        - Per ogni suggerimento, identifica la principale "target_query" (query di ricerca) che il nuovo contenuto dovrebbe targettizzare.
+        - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
+    `;
+    const contentGapSchema = {
+        type: Type.OBJECT,
+        properties: {
+            content_gap_suggestions: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        relevant_cluster: { type: Type.STRING },
+                        target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." }
+                    },
+                    required: ["title", "description", "relevant_cluster", "target_query"]
+                }
+            }
+        }
+    };
+
+    let contentGapSuggestions: ContentGapSuggestion[] = [];
+    try {
+        const contentGapResponse = await generateContentWithRetry(ai, {
+            model: "gemini-2.5-flash",
+            contents: contentGapPrompt,
+            config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
+        }, 4, 1000, onRetryCallback);
+        const responseText = contentGapResponse.text;
+        if (responseText) {
+            const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
+
+            if (seozoomApiKey && parsedSuggestions.length > 0) {
+                sendEvent({ type: 'progress', message: `Arricchimento dei dati con SEOZoom per ${parsedSuggestions.length} opportunità...` });
+                
+                const enrichmentPromises = parsedSuggestions.map(async (suggestion: ContentGapSuggestion) => {
+                    if (suggestion.target_query) {
+                        try {
+                            const seoData = await seozoom.getKeywordData(suggestion.target_query, seozoomApiKey!);
+                            return {
+                                ...suggestion,
+                                search_volume: seoData.search_volume,
+                                keyword_difficulty: seoData.keyword_difficulty,
+                                search_intent: seoData.search_intent,
+                            };
+                        } catch (e) {
+                            console.error(`Failed to enrich suggestion for query "${suggestion.target_query}"`, e);
+                            return suggestion; // Return original suggestion on error
+                        }
+                    }
+                    return suggestion;
+                });
+
+                contentGapSuggestions = await Promise.all(enrichmentPromises);
+                sendEvent({ type: 'progress', message: "Arricchimento SEOZoom completo." });
+            } else {
+                contentGapSuggestions = parsedSuggestions;
+            }
+        }
+        sendEvent({ type: 'progress', message: `Agente 3 completo. Identificate ${contentGapSuggestions.length} opportunità di contenuto.` });
+    } catch(e) {
+        console.error("Error during Content Gap Analysis phase:", e);
+        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+        throw new Error(`Agent 3 (Content Strategist) failed. Error: ${detailedError}`);
+    }
+    return contentGapSuggestions;
+}
+
 
 export async function topicalAuthorityFlow(options: {
   site_root: string;

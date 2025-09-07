@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion } from '../types';
 import VisualizerView from './VisualizerView';
@@ -38,6 +37,10 @@ interface ReportDisplayProps {
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;
+  onGenerateContentStrategy: () => void;
+  isContentStrategyLoading: boolean;
+  contentStrategyError: string | null;
+  contentStrategyLoadingMessage: string;
 }
 
 export const ReportDisplay = (props: ReportDisplayProps) => {
@@ -58,7 +61,11 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       onGenerateTopicalAuthority,
       isTopicalAuthorityLoading,
       topicalAuthorityError,
-      topicalAuthorityLoadingMessage
+      topicalAuthorityLoadingMessage,
+      onGenerateContentStrategy,
+      isContentStrategyLoading,
+      contentStrategyError,
+      contentStrategyLoadingMessage
   } = props;
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
@@ -238,8 +245,38 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
                 ) : (
                     <p className="text-center py-12 text-slate-500">Nessun cluster tematico generato.</p>
                 )}
-                {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 && (
+                {report.content_gap_suggestions && report.content_gap_suggestions.length > 0 ? (
                     <ContentGapAnalysis suggestions={report.content_gap_suggestions} />
+                ) : (
+                    <div className="mt-16 text-center py-12 px-6 bg-slate-50 rounded-2xl border border-slate-200">
+                        <LightBulbIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
+                        <h3 className="text-xl font-bold text-slate-800">Scopri le tue Opportunità di Contenuto</h3>
+                        <p className="max-w-xl mx-auto text-slate-600 mt-2 mb-6">
+                            Avvia un'analisi dedicata per identificare le lacune strategiche nei tuoi contenuti. L'AI analizzerà i dati di performance per suggerire nuovi articoli mirati a catturare traffico qualificato.
+                        </p>
+                        {!isContentStrategyLoading ? (
+                            <button 
+                                onClick={onGenerateContentStrategy}
+                                className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+                            >
+                                <BrainCircuitIcon className="w-5 h-5" />
+                                Genera Opportunità di Contenuto
+                            </button>
+                        ) : (
+                            <div className="flex flex-col items-center">
+                                <LoadingSpinnerIcon className="w-8 h-8 text-blue-600 mb-3" />
+                                <p className="text-slate-500 font-semibold animate-fade-in-up" key={contentStrategyLoadingMessage}>
+                                    {contentStrategyLoadingMessage}
+                                </p>
+                            </div>
+                        )}
+                        {contentStrategyError && (
+                            <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
+                                <XCircleIcon className="w-5 h-5" />
+                                <p className="text-sm">{contentStrategyError}</p>
+                            </div>
+                        )}
+                    </div>
                 )}
             </TabsContent>
 

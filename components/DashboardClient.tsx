@@ -1,8 +1,7 @@
-
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, TopicalAuthorityRoadmap } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, TopicalAuthorityRoadmap, ContentGapSuggestion } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -55,6 +54,10 @@ export default function DashboardClient() {
   const [isTopicalAuthorityLoading, setIsTopicalAuthorityLoading] = useState<boolean>(false);
   const [topicalAuthorityError, setTopicalAuthorityError] = useState<string | null>(null);
   const [topicalAuthorityLoadingMessage, setTopicalAuthorityLoadingMessage] = useState<string>('');
+  
+  const [isContentStrategyLoading, setIsContentStrategyLoading] = useState<boolean>(false);
+  const [contentStrategyError, setContentStrategyError] = useState<string | null>(null);
+  const [contentStrategyLoadingMessage, setContentStrategyLoadingMessage] = useState<string>('');
 
   const abortControllerRef = useRef<AbortController | null>(null);
   
@@ -378,6 +381,71 @@ export default function DashboardClient() {
       setIsTopicalAuthorityLoading(false);
     }
   }, [report, seozoomApiKey]);
+
+    const handleGenerateContentStrategy = useCallback(async () => {
+        if (!report) return;
+
+        setIsContentStrategyLoading(true);
+        setContentStrategyError(null);
+        setContentStrategyLoadingMessage("Avvio dell'analisi dei content gap...");
+
+        try {
+            const response = await fetch('/api/content-strategy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    site_root: report.site,
+                    thematic_clusters: report.thematic_clusters,
+                    gscData: report.gscData,
+                    ga4Data: report.ga4Data,
+                    seozoomApiKey: seozoomApiKey,
+                })
+            });
+
+            if (!response.ok || !response.body) {
+                const errorData = await response.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
+                throw new Error(errorData.details || `Server responded with status ${response.status}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.trim() === '') continue;
+                try {
+                const event = JSON.parse(line);
+                if (event.type === 'progress') {
+                    setContentStrategyLoadingMessage(event.message);
+                } else if (event.type === 'done') {
+                    const suggestions: ContentGapSuggestion[] = event.payload;
+                    setSavedReport(prev => {
+                        if (!prev) return null;
+                        const updatedReport: Report = { ...prev.report, content_gap_suggestions: suggestions };
+                        return { ...prev, report: updatedReport };
+                    });
+                } else if (event.type === 'error') {
+                    throw new Error(event.details || event.error);
+                }
+                } catch (e) {
+                console.error("Failed to parse content strategy stream chunk:", line, e);
+                }
+            }
+            }
+        } catch (err) {
+        setContentStrategyError(err instanceof Error ? err.message : 'Si è verificato un errore sconosciuto durante la generazione delle opportunità di contenuto.');
+        } finally {
+        setIsContentStrategyLoading(false);
+        }
+    }, [report, seozoomApiKey]);
   
   const handleNewAnalysis = () => {
     setSite(null);
@@ -469,6 +537,10 @@ export default function DashboardClient() {
                         isTopicalAuthorityLoading={isTopicalAuthorityLoading}
                         topicalAuthorityError={topicalAuthorityError}
                         topicalAuthorityLoadingMessage={topicalAuthorityLoadingMessage}
+                        onGenerateContentStrategy={handleGenerateContentStrategy}
+                        isContentStrategyLoading={isContentStrategyLoading}
+                        contentStrategyError={contentStrategyError}
+                        contentStrategyLoadingMessage={contentStrategyLoadingMessage}
                     />
                 );
             }
