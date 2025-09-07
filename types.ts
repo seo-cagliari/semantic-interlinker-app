@@ -1,8 +1,4 @@
 
-
-
-
-
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -65,6 +61,8 @@ export type ContentGapSuggestion = {
   search_volume?: number;
   keyword_difficulty?: number;
   search_intent?: string;
+  commercial_opportunity_score?: number; // Punteggio da 1 a 10
+  commercial_opportunity_rationale?: string; // Spiegazione del punteggio
 };
 
 // --- Tipi per il Content Architect ---
@@ -147,6 +145,7 @@ export type ActionStep = {
 };
 
 export type StrategicActionPlan = {
+  page_strategic_role_summary: string; // Riepilogo del ruolo della pagina (es. "Pagina Core nel pillar X...")
   executive_summary: string;
   strategic_checklist: ActionStep[];
 };

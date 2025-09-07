@@ -1,6 +1,6 @@
 
 import { contentStrategyFlow } from '../../../genkit/flows/interlinkFlow';
-import { ThematicCluster, GscDataRow, Ga4DataRow, ContentGapSuggestion } from '../../../types';
+import { ThematicCluster, GscDataRow, Ga4DataRow, ContentGapSuggestion, StrategicContext } from '../../../types';
 import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -21,12 +21,13 @@ export async function POST(req: NextRequest) {
 
       try {
         const body = await req.json();
-        const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey } = body as {
+        const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, strategicContext } = body as {
           site_root: string;
           thematic_clusters: ThematicCluster[];
           gscData?: GscDataRow[];
           ga4Data?: Ga4DataRow[];
           seozoomApiKey?: string;
+          strategicContext?: StrategicContext;
         };
         
         if (!site_root || !thematic_clusters) {
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
           gscData,
           ga4Data,
           seozoomApiKey,
+          strategicContext,
           sendEvent,
         });
 

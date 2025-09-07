@@ -491,9 +491,10 @@ export async function contentStrategyFlow(options: {
   gscData?: GscDataRow[];
   ga4Data?: Ga4DataRow[];
   seozoomApiKey?: string;
+  strategicContext?: StrategicContext;
   sendEvent: (event: object) => void;
 }): Promise<ContentGapSuggestion[]> {
-    const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, sendEvent } = options;
+    const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, strategicContext, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
     
     const onRetryCallback = (attempt: number, delay: number) => {
@@ -502,45 +503,49 @@ export async function contentStrategyFlow(options: {
 
     const hasGscData = gscData && gscData.length > 0;
     const gscDataStringForPrompt = hasGscData
-        ? `Inoltre, hai accesso ai seguenti dati reali di performance da Google Search Console (primi 200 record). Usali come fonte primaria per comprendere l'importanza delle pagine e l'intento dell'utente.
+        ? `Dati di performance da Google Search Console:
     Formato: 'query', 'pagina', 'impressioni', 'ctr'
     ${gscData?.slice(0, 200).map(row => `"${row.keys[0]}", "${row.keys[1]}", ${row.impressions}, ${row.ctr}`).join('\n')}
-    ${gscData!.length > 200 ? `(e altri ${gscData!.length - 200} record)` : ''}
-    `
-        : "Non sono stati forniti dati da Google Search Console. Basa la tua analisi solo sulla struttura del sito.";
+    ${gscData!.length > 200 ? `(e altri ${gscData!.length - 200} record)` : ''}`
+        : "Non sono stati forniti dati da Google Search Console.";
     
     const hasGa4Data = ga4Data && ga4Data.length > 0;
     const ga4DataStringForPrompt = hasGa4Data
-        ? `Inoltre, hai accesso ai seguenti dati comportamentali da Google Analytics 4. Usali per valutare il valore strategico delle pagine.
+        ? `Dati comportamentali da Google Analytics 4:
     Formato: 'pagePath', 'sessions', 'engagementRate', 'conversions'
-    ${ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}
-    `
-        : "Non sono stati forniti dati da Google Analytics 4. Basa la tua analisi comportamentale solo sui dati GSC.";
+    ${ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}`
+        : "Non sono stati forniti dati da Google Analytics 4.";
+        
+    const strategicContextString = strategicContext ? `CONTESTO STRATEGICO DI BUSINESS (DA USARE COME FILTRO PRIMARIO):
+        - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
+        - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"`
+        : "Nessun contesto di business fornito. Basa l'analisi solo sui dati di performance.";
 
     // --- AGENT 3: CONTENT STRATEGIST ---
     sendEvent({ type: 'progress', message: "Agente 3: Il Content Strategist sta cercando 'content gap'..." });
     const contentGapPrompt = `
         Agisci come un SEO Content Strategist di livello mondiale per "${site_root}".
 
-        CONTESTO:
+        ${strategicContextString}
+
+        DATI DISPONIBILI:
         1. Cluster tematici del sito:
         ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
-
-        2. Dati di performance da Google Search Console:
-        ${gscDataStringForPrompt}
-        
-        3. Dati Comportamentali da Google Analytics 4:
-        ${ga4DataStringForPrompt}
+        2. ${gscDataStringForPrompt}
+        3. ${ga4DataStringForPrompt}
 
         IL TUO COMPITO:
-        Identifica le lacune di contenuto strategiche.
+        Identifica le lacune di contenuto strategiche e **prioritizzale in base al loro potenziale commerciale**.
 
         ISTRUZIONI STRATEGICHE:
-        - ANALIZZA LE QUERY DEBOLI: Cerca nei dati GSC le query per cui il sito ha visibilità (impressioni) ma scarso engagement (basso CTR) o per le quali nessuna pagina risponde in modo soddisfacente.
-        - ANALIZZA LE PERFORMANCE COMPORTAMENTALI: Usa i dati GA4 per identificare le pagine 'underperforming'. Se una pagina ha molte impressioni (da GSC) ma un basso tasso di engagement (da GA4), è un'opportunità di contenuto.
-        - SUGGERISCI CONTENUTI MIRATI: Proponi 3-5 nuovi articoli che rispondano direttamente a queste query deboli o migliorino le pagine underperforming, per colmare le lacune di performance e aumentare l'autorità.
-        - Per ogni suggerimento, identifica la principale "target_query" (query di ricerca) che il nuovo contenuto dovrebbe targettizzare.
-        - Fornisci tutti gli output testuali in lingua italiana e rispetta lo schema JSON.
+        1.  **IDENTIFICA GAP DI PERFORMANCE:** Cerca nei dati GSC le query con alte impressioni ma basso CTR o le pagine con molto traffico (GSC/GA4) ma basso engagement/conversioni (GA4).
+        2.  **FILTRA PER RILEVANZA COMMERCIALE:** Valuta ogni gap identificato rispetto al "Source Context". Un gap su un argomento non allineato al business ha bassa priorità. Un gap su un argomento che supporta direttamente l'obiettivo di business è ad alta priorità.
+        3.  **ASSEGNA UN PUNTEGGIO DI OPPORTUNITÀ:** Per ogni suggerimento, assegna un \`commercial_opportunity_score\` da 1 a 10.
+            -   Un punteggio alto (8-10) indica un'opportunità che (A) ha un forte segnale di domanda nei dati (alte impressioni) E (B) è strettamente allineata al "Source Context" del business.
+            -   Un punteggio basso (1-4) indica un'opportunità con segnali di domanda più deboli o meno allineata al business.
+        4.  **FORNISCI UNA MOTIVAZIONE:** Nel campo \`commercial_opportunity_rationale\`, spiega brevemente perché hai assegnato quel punteggio, collegando i dati di performance all'obiettivo di business.
+        5.  **SUGGERISCI CONTENUTI MIRATI:** Proponi 3-5 nuovi articoli per colmare i gap a più alta priorità. Identifica la "target_query" principale per ciascuno.
+        6.  **REGOLE FINALI:** Fornisci tutti gli output in italiano e rispetta lo schema JSON.
     `;
     const contentGapSchema = {
         type: Type.OBJECT,
@@ -553,9 +558,11 @@ export async function contentStrategyFlow(options: {
                         title: { type: Type.STRING },
                         description: { type: Type.STRING },
                         relevant_cluster: { type: Type.STRING },
-                        target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." }
+                        target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." },
+                        commercial_opportunity_score: { type: Type.NUMBER, description: "Punteggio di opportunità commerciale da 1 a 10." },
+                        commercial_opportunity_rationale: { type: Type.STRING, description: "Spiegazione del punteggio." }
                     },
-                    required: ["title", "description", "relevant_cluster", "target_query"]
+                    required: ["title", "description", "relevant_cluster", "target_query", "commercial_opportunity_score", "commercial_opportunity_rationale"]
                 }
             }
         }
@@ -800,60 +807,75 @@ export async function deepAnalysisFlow(options: {
   pageUrl: string;
   pageDiagnostics: PageDiagnostic[];
   gscData?: GscDataRow[];
+  strategicContext?: StrategicContext;
+  thematic_clusters?: ThematicCluster[];
 }): Promise<DeepAnalysisReport> {
   console.log(`Deep Analysis Agent started for ${options.pageUrl}`);
 
-  const analyzedPageDiagnostic = options.pageDiagnostics.find(p => p.url === options.pageUrl);
+  const { pageUrl, pageDiagnostics, gscData, strategicContext, thematic_clusters } = options;
+
+  const analyzedPageDiagnostic = pageDiagnostics.find(p => p.url === pageUrl);
   if (!analyzedPageDiagnostic) {
-    throw new Error(`Could not find page diagnostics for ${options.pageUrl}`);
+    throw new Error(`Could not find page diagnostics for ${pageUrl}`);
   }
 
-  const pageContent = await wp.getPageContent(options.pageUrl);
+  const pageContent = await wp.getPageContent(pageUrl);
   if (!pageContent) {
-    throw new Error(`Could not retrieve content for page: ${options.pageUrl}`);
+    throw new Error(`Could not retrieve content for page: ${pageUrl}`);
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-  const hasGscData = options.gscData && options.gscData.length > 0;
+  const hasGscData = gscData && gscData.length > 0;
   const gscDataString = hasGscData 
-    ? `Inoltre, hai accesso ai seguenti dati reali di performance da Google Search Console. Sfruttali per guidare i tuoi suggerimenti.
-      'query', 'pagina', 'impressioni', 'ctr'
-      ${options.gscData?.map(row => `"${row.keys[0]}", "${row.keys[1]}", ${row.impressions}, ${row.ctr}`).join('\n')}
-    `
+    ? `Dati di Google Search Console (GSC):
+      ${gscData?.map(row => `'${row.keys[0]}', '${row.keys[1]}', ${row.impressions}, ${row.ctr}`).join('\n')}`
     : "Non sono stati forniti dati da Google Search Console.";
 
-  const deepAnalysisPrompt = `
-    Agisci come un "Semantic SEO Coach" di livello mondiale. Il tuo compito è analizzare in profondità una singola pagina e generare un **Piano d'Azione Strategico** chiaro e azionabile per migliorarne drasticamente le performance.
+  const strategicContextString = strategicContext ? `CONTESTO STRATEGICO GENERALE DEL SITO:
+    - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
+    - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"`
+    : "Nessun contesto di business generale fornito.";
+    
+  const clustersString = thematic_clusters ? `CLUSTER TEMATICI DEL SITO:
+    ${thematic_clusters.map(c => `- ${c.cluster_name}: ${c.pages.join(', ')}`).join('\n')}`
+    : "Nessuna informazione sui cluster tematici fornita.";
 
-    PAGINA DA ANALIZZARE: ${options.pageUrl}
+  const deepAnalysisPrompt = `
+    Agisci come un "Semantic SEO Coach" di livello mondiale, esperto della metodologia Holistic SEO di Koray Gübür. Il tuo compito è analizzare in profondità una singola pagina e generare un **Piano d'Azione Strategico** chiaro e contestualizzato.
+
+    PAGINA DA ANALIZZARE: ${pageUrl}
     Punteggio di Autorità Interna: ${analyzedPageDiagnostic.internal_authority_score.toFixed(2)}/10
+
+    ${strategicContextString}
 
     DATI DISPONIBILI:
     1.  Contenuto della pagina (primi 8000 caratteri):
         ---
         ${pageContent.substring(0, 8000)} 
         ---
-    2.  Mappa del sito con punteggi di autorità:
-        ${options.pageDiagnostics.filter(p => p.url !== options.pageUrl).map(p => `[Score: ${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
-    3.  Dati di Google Search Console (GSC):
-        ${gscDataString}
+    2.  Mappa del sito con punteggi di autorità e cluster tematici:
+        ${clustersString}
+        ${pageDiagnostics.filter(p => p.url !== pageUrl).map(p => `[Score: ${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+    3.  ${gscDataString}
 
-    IL TUO COMPITO:
-    Basandoti sull'analisi combinata di contenuto, autorità interna e dati GSC, genera un report JSON. Il report deve contenere:
-    1.  Un **Piano d'Azione Strategico (\`action_plan\`)**: Questo è il cuore del tuo output. Deve includere:
-        - Un \`executive_summary\`: un paragrafo conciso che spieghi la situazione attuale della pagina e l'obiettivo strategico delle modifiche.
-        - Una \`strategic_checklist\`: una lista di 3-5 azioni concrete e prioritarie. Ogni azione deve avere un titolo, una descrizione chiara e una priorità ('Alta', 'Media', 'Bassa').
-    2.  Dati di supporto dettagliati:
-        - \`opportunity_queries\`: Le query con alte impressioni e basso CTR da GSC.
-        - \`inbound_links\`: Suggerimenti di link in entrata per supportare il piano.
-        - \`outbound_links\`: Link in uscita per migliorare il contesto.
-        - \`content_enhancements\`: Modifiche specifiche al contenuto.
+    IL TUO COMPITO IN 3 FASI:
+    **FASE 1: DETERMINA IL RUOLO STRATEGICO DELLA PAGINA.**
+    Basandoti sul Contesto Strategico e sui Cluster, determina il ruolo di questa pagina. È una pagina 'Core' (transazionale, legata al business) o 'Outer' (informativa, di supporto)? A quale Pillar/Cluster appartiene? Inizia la tua analisi con un \`page_strategic_role_summary\`.
+
+    **FASE 2: GENERA UN PIANO D'AZIONE CONTESTUALIZZATO.**
+    Crea un \`action_plan\` basato sul ruolo determinato.
+    -   **Se è una pagina 'Core'**: i tuoi suggerimenti devono focalizzarsi su Ottimizzazione del Tasso di Conversione (CRO), rafforzamento delle Call-to-Action (CTA), chiarezza dell'offerta e attrazione di link da pagine 'Outer' pertinenti.
+    -   **Se è una pagina 'Outer'**: i tuoi suggerimenti devono focalizzarsi su aumentare la completezza e la profondità del contenuto, migliorare l'engagement dell'utente, rispondere a più domande e inserire link strategici in uscita verso le pagine 'Core' rilevanti.
+    Il piano deve includere un \`executive_summary\` e una \`strategic_checklist\` di 3-5 azioni concrete e prioritarie.
+
+    **FASE 3: FORNISCI DATI DI SUPPORTO.**
+    Popola le sezioni \`opportunity_queries\`, \`inbound_links\`, \`outbound_links\`, e \`content_enhancements\` con suggerimenti che supportino direttamente il piano d'azione che hai definito. Ogni suggerimento deve essere strategico e contestualizzato al ruolo della pagina.
 
     REGOLE CRITICHE:
     - La risposta DEVE essere un oggetto JSON valido in lingua italiana.
     - Tutti gli URL suggeriti DEVONO provenire dall'elenco di pagine del sito.
-    - Il piano d'azione deve essere il punto focale della tua analisi.
+    - Il piano d'azione deve essere il punto focale e la sua strategia deve dipendere dal ruolo (Core/Outer) che hai identificato.
   `;
 
   const deepAnalysisSchema = {
@@ -862,6 +884,7 @@ export async function deepAnalysisFlow(options: {
         action_plan: {
           type: Type.OBJECT,
           properties: {
+            page_strategic_role_summary: { type: Type.STRING, description: "Riepilogo del ruolo strategico della pagina (es. 'Questa è una pagina Outer nel pillar Consulenza SEO...')." },
             executive_summary: { type: Type.STRING, description: "Riepilogo strategico della situazione e degli obiettivi." },
             strategic_checklist: {
               type: Type.ARRAY,
@@ -876,7 +899,7 @@ export async function deepAnalysisFlow(options: {
               }
             }
           },
-          required: ["executive_summary", "strategic_checklist"]
+          required: ["page_strategic_role_summary", "executive_summary", "strategic_checklist"]
         },
         opportunity_queries: {
           type: Type.ARRAY,
@@ -930,14 +953,14 @@ export async function deepAnalysisFlow(options: {
     if (!responseText) throw new Error("Received empty response from Gemini during deep analysis.");
     
     const report = JSON.parse(responseText.trim());
-    report.analyzed_url = options.pageUrl;
+    report.analyzed_url = pageUrl;
     report.authority_score = analyzedPageDiagnostic.internal_authority_score;
     
-    console.log(`Deep Analysis Agent for ${options.pageUrl} complete.`);
+    console.log(`Deep Analysis Agent for ${pageUrl} complete.`);
     return report;
 
   } catch (e) {
-    console.error(`Error during deep analysis for ${options.pageUrl}:`, e);
+    console.error(`Error during deep analysis for ${pageUrl}:`, e);
     const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
     throw new Error(`Failed to generate deep analysis report. Error: ${detailedError}`);
   }

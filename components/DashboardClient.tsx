@@ -46,8 +46,6 @@ export default function DashboardClient() {
   const [isDeepLoading, setIsDeepLoading] = useState<boolean>(false);
   const [deepError, setDeepError] = useState<string | null>(null);
   
-  const [gscData, setGscData] = useState<GscDataRow[] | null>(null);
-
   const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
   const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
@@ -164,7 +162,6 @@ export default function DashboardClient() {
     setSelectedDeepAnalysisUrl('');
     setSelectedSuggestions(new Set());
     setFilters({ minScore: 0, cluster: 'all', risk: 'all' });
-    setGscData(payload.gscData);
     setLoadingMessage("Connessione al server per avviare l'analisi...");
     
     setSite(payload.siteUrl);
@@ -267,7 +264,9 @@ export default function DashboardClient() {
         body: JSON.stringify({
           pageUrl: finalUrl,
           pageDiagnostics: report.page_diagnostics,
-          gscData: gscData
+          gscData: report.gscData,
+          strategicContext: report.strategic_context, // Passa il contesto strategico
+          thematic_clusters: report.thematic_clusters // Passa i cluster tematici
         })
       });
 
@@ -284,7 +283,7 @@ export default function DashboardClient() {
     } finally {
       setIsDeepLoading(false);
     }
-  }, [selectedDeepAnalysisUrl, report?.page_diagnostics, gscData]);
+  }, [selectedDeepAnalysisUrl, report]);
   
   const handleProgressCheck = useCallback(async () => {
     if (!savedReport) {
@@ -403,6 +402,7 @@ export default function DashboardClient() {
                     gscData: report.gscData,
                     ga4Data: report.ga4Data,
                     seozoomApiKey: seozoomApiKey,
+                    strategicContext: report.strategic_context // Passa il contesto strategico
                 })
             });
 
