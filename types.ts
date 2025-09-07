@@ -1,5 +1,6 @@
 
 
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -88,9 +89,9 @@ export type TopicalClusterSuggestion = {
   impact_rationale?: string; // Spiegazione del punteggio
 };
 
-export type TopicalAuthorityRoadmap = {
-  main_topic: string;
-  coverage_score: number; // A score from 0 to 100
+export type PillarRoadmap = {
+  pillar_name: string;
+  strategic_summary: string;
   cluster_suggestions: TopicalClusterSuggestion[];
 };
 
@@ -236,7 +237,7 @@ export type Report = {
   content_gap_suggestions: ContentGapSuggestion[];
   page_diagnostics: PageDiagnostic[];
   opportunity_hub?: OpportunityPage[];
-  topical_authority_roadmap?: TopicalAuthorityRoadmap;
+  pillar_roadmaps?: PillarRoadmap[];
   internal_links_map: Record<string, string[]>; // Mappa dei link per il visualizer
   gscData?: GscDataRow[];
   ga4Data?: Ga4DataRow[];

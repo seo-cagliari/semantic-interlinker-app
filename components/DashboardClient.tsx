@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, TopicalAuthorityRoadmap, ContentGapSuggestion } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -11,7 +11,6 @@ import { Filters } from './SuggestionFilters';
 import { ProgressDashboard } from './ProgressDashboard';
 
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
-const SERP_API_KEY_STORAGE_KEY = 'semantic-interlinker-serp-api-key';
 
 
 type View = 'connect' | 'loading' | 'report' | 'progress';
@@ -29,7 +28,6 @@ export default function DashboardClient() {
   const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
-  const [serpApiKey, setSerpApiKey] = useState<string>('');
   
   const [view, setView] = useState<View>('connect');
   const [error, setError] = useState<string | null>(null);
@@ -84,15 +82,12 @@ export default function DashboardClient() {
 
       const savedSeozoomKey = window.localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
       setSeozoomApiKey(savedSeozoomKey);
-      const savedSerpKey = window.localStorage.getItem(SERP_API_KEY_STORAGE_KEY) || '';
-      setSerpApiKey(savedSerpKey);
 
     } catch (e) {
       console.error("Failed to load state from localStorage:", e);
       setSite(null);
       setSavedReport(null);
       setSeozoomApiKey('');
-      setSerpApiKey('');
     } finally {
         setIsLoadedFromStorage(true);
     }
@@ -131,12 +126,11 @@ export default function DashboardClient() {
     if (isLoadedFromStorage) {
         try {
             window.localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
-            window.localStorage.setItem(SERP_API_KEY_STORAGE_KEY, serpApiKey);
         } catch (e) {
             console.error("Failed to persist API keys to localStorage:", e);
         }
     }
-  }, [seozoomApiKey, serpApiKey, isLoadedFromStorage]);
+  }, [seozoomApiKey, isLoadedFromStorage]);
   
   const report = useMemo(() => savedReport?.report ?? null, [savedReport]);
 
@@ -323,19 +317,13 @@ export default function DashboardClient() {
     }
   }, [savedReport]);
 
-  const handleGenerateTopicalAuthority = useCallback(async (currentSerpApiKey: string) => {
+  const handleGenerateTopicalAuthority = useCallback(async () => {
     if (!report) return;
 
     setIsTopicalAuthorityLoading(true);
     setTopicalAuthorityError(null);
     setTopicalAuthorityLoadingMessage("Avvio dello stratega di Topical Authority...");
     
-    if (currentSerpApiKey !== serpApiKey) {
-        setSerpApiKey(currentSerpApiKey);
-    }
-    
-    let analysisCompletedSuccessfully = false;
-
     try {
         const response = await fetch('/api/topical-authority', {
             method: 'POST',
@@ -343,10 +331,6 @@ export default function DashboardClient() {
             body: JSON.stringify({
                 site_root: report.site,
                 thematic_clusters: report.thematic_clusters,
-                page_diagnostics: report.page_diagnostics,
-                opportunity_hub_data: report.opportunity_hub || [],
-                serpApiKey: currentSerpApiKey,
-                seozoomApiKey: seozoomApiKey,
             })
         });
 
@@ -374,11 +358,10 @@ export default function DashboardClient() {
               if (event.type === 'progress') {
                 setTopicalAuthorityLoadingMessage(event.message);
               } else if (event.type === 'done') {
-                analysisCompletedSuccessfully = true;
-                const roadmap: TopicalAuthorityRoadmap = event.payload;
+                const roadmaps: PillarRoadmap[] = event.payload;
                 setSavedReport(prev => {
                     if (!prev) return null;
-                    const updatedReport: Report = { ...prev.report, topical_authority_roadmap: roadmap };
+                    const updatedReport: Report = { ...prev.report, pillar_roadmaps: roadmaps };
                     return { ...prev, report: updatedReport };
                 });
               } else if (event.type === 'error') {
@@ -390,16 +373,12 @@ export default function DashboardClient() {
           }
         }
 
-        if (!analysisCompletedSuccessfully) {
-            throw new Error("La connessione con il server si è interrotta inaspettatamente. Il processo di analisi potrebbe aver superato i limiti di tempo o di memoria del server. Riprova o contatta il supporto se il problema persiste.");
-        }
-
     } catch (err) {
       setTopicalAuthorityError(err instanceof Error ? err.message : 'Si è verificato un errore sconosciuto durante la generazione della roadmap.');
     } finally {
       setIsTopicalAuthorityLoading(false);
     }
-  }, [report, seozoomApiKey, serpApiKey]);
+  }, [report]);
 
     const handleGenerateContentStrategy = useCallback(async () => {
         if (!report) return;
@@ -556,7 +535,6 @@ export default function DashboardClient() {
                         isTopicalAuthorityLoading={isTopicalAuthorityLoading}
                         topicalAuthorityError={topicalAuthorityError}
                         topicalAuthorityLoadingMessage={topicalAuthorityLoadingMessage}
-                        initialSerpApiKey={serpApiKey}
                         onGenerateContentStrategy={handleGenerateContentStrategy}
                         isContentStrategyLoading={isContentStrategyLoading}
                         contentStrategyError={contentStrategyError}

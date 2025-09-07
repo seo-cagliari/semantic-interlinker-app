@@ -1,7 +1,8 @@
 
 
+
 import { topicalAuthorityFlow } from '../../../genkit/flows/interlinkFlow';
-import { ThematicCluster, PageDiagnostic, OpportunityPage, TopicalAuthorityRoadmap } from '../../../types';
+import { ThematicCluster, PageDiagnostic, OpportunityPage, PillarRoadmap } from '../../../types';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -25,34 +26,22 @@ export async function POST(req: NextRequest) {
         const { 
           site_root, 
           thematic_clusters, 
-          page_diagnostics, 
-          opportunity_hub_data, 
-          serpApiKey,
-          seozoomApiKey 
         } = body as {
           site_root: string;
           thematic_clusters: ThematicCluster[];
-          page_diagnostics: PageDiagnostic[];
-          opportunity_hub_data: OpportunityPage[];
-          serpApiKey: string;
-          seozoomApiKey?: string;
         };
 
-        if (!site_root || !thematic_clusters || !page_diagnostics || !serpApiKey) {
-          throw new Error('site_root, thematic_clusters, page_diagnostics, and serpApiKey are required.');
+        if (!site_root || !thematic_clusters) {
+          throw new Error('site_root and thematic_clusters are required.');
         }
 
-        const roadmap: TopicalAuthorityRoadmap = await topicalAuthorityFlow({
+        const roadmaps: PillarRoadmap[] = await topicalAuthorityFlow({
           site_root,
           thematic_clusters,
-          page_diagnostics,
-          opportunity_hub_data,
-          serpApiKey,
-          seozoomApiKey,
           sendEvent,
         });
 
-        sendEvent({ type: 'done', payload: roadmap });
+        sendEvent({ type: 'done', payload: roadmaps });
 
       } catch (error) {
         console.error('API Error in /api/topical-authority stream:', error);

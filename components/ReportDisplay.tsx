@@ -33,11 +33,10 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
-  onGenerateTopicalAuthority: (serpApiKey: string) => void;
+  onGenerateTopicalAuthority: () => void;
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;
-  initialSerpApiKey: string;
   onGenerateContentStrategy: () => void;
   isContentStrategyLoading: boolean;
   contentStrategyError: string | null;
@@ -63,7 +62,6 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       isTopicalAuthorityLoading,
       topicalAuthorityError,
       topicalAuthorityLoadingMessage,
-      initialSerpApiKey,
       onGenerateContentStrategy,
       isContentStrategyLoading,
       contentStrategyError,
@@ -206,15 +204,14 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
             </TabsContent>
 
             <TabsContent value="topical_authority">
-                {report.topical_authority_roadmap ? (
-                    <TopicalAuthorityRoadmap roadmap={report.topical_authority_roadmap} />
+                {report.pillar_roadmaps ? (
+                    <TopicalAuthorityRoadmap roadmaps={report.pillar_roadmaps} />
                 ) : (
                    <TopicalAuthorityGenerator
                         onGenerate={onGenerateTopicalAuthority}
                         isLoading={isTopicalAuthorityLoading}
                         error={topicalAuthorityError}
                         loadingMessage={topicalAuthorityLoadingMessage}
-                        initialApiKey={initialSerpApiKey}
                    />
                 )}
             </TabsContent>

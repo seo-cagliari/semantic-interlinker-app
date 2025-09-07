@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap, TopicalClusterSuggestion, ContentBrief, SerpAnalysisResult } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, PillarRoadmap, ContentBrief, SerpAnalysisResult } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 import { serpAnalyzer } from '../tools/serp';
@@ -607,111 +607,60 @@ export async function contentStrategyFlow(options: {
 export async function topicalAuthorityFlow(options: {
   site_root: string;
   thematic_clusters: ThematicCluster[];
-  page_diagnostics: PageDiagnostic[];
-  opportunity_hub_data: OpportunityPage[];
-  serpApiKey: string;
-  seozoomApiKey?: string;
   sendEvent: (event: object) => void;
-}): Promise<TopicalAuthorityRoadmap> {
-    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, serpApiKey, seozoomApiKey, sendEvent } = options;
+}): Promise<PillarRoadmap[]> {
+    const { site_root, thematic_clusters, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const onRetryCallback = (attempt: number, delay: number) => {
         sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
     };
     
-    // --- NEW AGENT: THEMATIC DISCOVERY AGENT ---
-    sendEvent({ type: 'progress', message: "Agente di Scoperta: Sto identificando l'argomento principale del sito..." });
-    let mainTopic = '';
+    // --- AGENT 4.1: PILLAR DISCOVERY AGENT ---
+    sendEvent({ type: 'progress', message: "Agente di Scoperta: Sto identificando i Pillar strategici del sito..." });
+    let strategicPillars: string[] = [];
     try {
-        const topicDiscoveryPrompt = `
-          Agisci come un esperto architetto dell'informazione. Analizza i seguenti cluster tematici di un sito web e sintetizza l'argomento principale ("seed topic") di livello più alto che li comprende tutti.
-          
-          CLUSTER TEMATICI:
+        const pillarDiscoveryPrompt = `
+          Agisci come un consulente strategico SEO di altissimo livello. Analizza i seguenti cluster tematici di un sito web e identifica i 2-4 "Pillar" di business principali. I Pillar sono le macro-aree di competenza del sito, non singoli argomenti.
+
+          CLUSTER TEMATICI ESISTENTI:
           ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
           
           ISTRUZIONI:
-          - Sii conciso e strategico.
-          - La tua risposta DEVE essere un oggetto JSON con una sola chiave: "main_topic".
-          - Esempio: Se i cluster sono "SEO On-Page", "Link Building", "SEO Tecnica", il main_topic potrebbe essere "Consulenza SEO Avanzata".
+          - Sii strategico e raggruppa concetti correlati sotto un unico Pillar.
+          - Esempio: Se i cluster sono "SEO On-Page", "Link Building", "SEO Tecnica", un Pillar corretto è "Consulenza SEO". Se sono "Web Design E-commerce" e "Sviluppo Siti Vetrina", un Pillar è "Realizzazione Siti Web".
+          - La tua risposta DEVE essere un oggetto JSON con una sola chiave: "pillars", che è un array di stringhe.
         `;
-        const topicDiscoverySchema = {
+        const pillarDiscoverySchema = {
             type: Type.OBJECT,
             properties: {
-                main_topic: { type: Type.STRING }
+                pillars: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ["main_topic"]
+            required: ["pillars"]
         };
 
-        const topicResponse = await generateContentWithRetry(ai, {
+        const pillarResponse = await generateContentWithRetry(ai, {
             model: "gemini-2.5-flash",
-            contents: topicDiscoveryPrompt,
-            config: { responseMimeType: "application/json", responseSchema: topicDiscoverySchema, seed: 42 },
+            contents: pillarDiscoveryPrompt,
+            config: { responseMimeType: "application/json", responseSchema: pillarDiscoverySchema, seed: 42 },
         }, 4, 1000, onRetryCallback);
 
-        const responseText = topicResponse.text;
-        if (!responseText) throw new Error("Received empty response from Topic Discovery agent.");
-        mainTopic = JSON.parse(responseText.trim()).main_topic;
-        sendEvent({ type: 'progress', message: `Argomento principale identificato: "${mainTopic}"` });
+        const responseText = pillarResponse.text;
+        if (!responseText) throw new Error("Received empty response from Pillar Discovery agent.");
+        strategicPillars = JSON.parse(responseText.trim()).pillars;
+        sendEvent({ type: 'progress', message: `Identificati ${strategicPillars.length} Pillar: ${strategicPillars.join(', ')}` });
 
     } catch(e) {
         const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-        throw new Error(`Topic Discovery Agent failed. Error: ${detailedError}`);
+        throw new Error(`Pillar Discovery Agent failed. Error: ${detailedError}`);
     }
 
-
-    // --- AGENT 5: SERP ANALYST ---
-    sendEvent({ type: 'progress', message: `Agente 5: L'Analista SERP sta esaminando i competitor per "${mainTopic}"...` });
-    let serpAnalysisResult: SerpAnalysisResult;
-    try {
-        serpAnalysisResult = await serpAnalyzer.getSerpAnalysis(mainTopic, serpApiKey, (progressMessage) => {
-            sendEvent({ type: 'progress', message: progressMessage });
-        });
-    } catch (e) {
-        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-        throw new Error(`Agent 5 (SERP Analyst) failed. Error: ${detailedError}`);
-    }
-
-    // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST (UPGRADED) ---
-    sendEvent({ type: 'progress', message: "Agente 4: Lo Stratega di Topical Authority sta costruendo la tua roadmap..." });
-    let topicalAuthorityRoadmap: TopicalAuthorityRoadmap | undefined = undefined;
-
-    const topicalAuthorityPrompt = `
-      Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority e SEO semantica.
-      
-      CONTESTO CRUCIALE:
-      Stai analizzando il sito "${site_root}". Il tuo obiettivo è renderlo un'autorità per l'argomento principale: "${mainTopic}".
-
-      1.  **Stato Attuale del Sito:** Questi sono i cluster tematici che il sito copre attualmente.
-          ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
-
-      2.  **Mappa Tematica Ideale (Basata su Dati SERP Reali):** Hai appena eseguito un'analisi in tempo reale della SERP di Google per "${mainTopic}". Questa è la mappa di ciò che Google sta premiando ORA.
-          -   **Sotto-argomenti chiave (estratti dai titoli H2/H3 dei top competitor):** ${serpAnalysisResult.ideal_topical_map.sub_topics.join(', ')}
-          -   **Domande degli utenti (da "People Also Ask"):** ${serpAnalysisResult.ideal_topical_map.user_questions.join(', ')}
-          -   **Ricerche Correlate:** ${serpAnalysisResult.ideal_topical_map.related_searches.join(', ')}
-          -   **Sintesi dell'Analisi dei Competitor:** ${serpAnalysisResult.competitor_analysis_summary}
-
-      IL TUO COMPITO:
-      Crea una "Topical Authority Roadmap" eseguendo un **confronto diretto e chirurgico** tra lo stato attuale del sito e la mappa tematica ideale basata sui dati della SERP.
-      
-      ISTRUZIONI:
-      1.  **Conferma l'Argomento Principale:** Dichiara il 'main_topic' come "${mainTopic}".
-      2.  **Valuta la Copertura (Data-Driven):** Basandoti sul confronto, assegna un 'coverage_score' da 0 a 100 che rappresenti quanto bene i cluster attuali del sito coprono i sotto-argomenti e le domande della mappa ideale.
-      3.  **Identifica i Cluster Mancanti (Gap Analysis):** Identifica 2-4 cluster concettuali di alto livello che sono presenti nella mappa ideale ma assenti (o trattati superficialmente) sul sito. Questi sono i tuoi content gap più importanti.
-      4.  **Genera Suggerimenti di Contenuto (Azionabili):** Per ogni cluster mancante, fornisci:
-          -   Una 'strategic_rationale' che spieghi perché quel cluster è essenziale per colmare il gap rispetto a ciò che la SERP sta premiando.
-          -   2-3 titoli di articoli ('article_suggestions') **estremamente specifici e basati sui dati SERP** (sotto-argomenti, domande utente).
-          -   Le 'target_queries' pertinenti per ogni articolo.
-      
-      OUTPUT:
-      La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
-    `;
-
-    const topicalAuthoritySchema = {
+    // --- AGENT 4.2: TOPICAL AUTHORITY STRATEGIST (MULTI-PILLAR ANALYSIS) ---
+    const pillarRoadmaps: PillarRoadmap[] = [];
+    const gapAnalysisSchema = {
       type: Type.OBJECT,
       properties: {
-        main_topic: { type: Type.STRING },
-        coverage_score: { type: Type.NUMBER },
+        strategic_summary: { type: Type.STRING },
         cluster_suggestions: {
           type: Type.ARRAY,
           items: {
@@ -735,137 +684,77 @@ export async function topicalAuthorityFlow(options: {
           }
         }
       },
-      required: ["main_topic", "coverage_score", "cluster_suggestions"]
+      required: ["strategic_summary", "cluster_suggestions"]
     };
 
-    try {
-        const topicalResponse = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: topicalAuthorityPrompt,
-        config: { responseMimeType: "application/json", responseSchema: topicalAuthoritySchema, seed: 42 },
-        }, 4, 1000, onRetryCallback);
-
-        const responseText = topicalResponse.text;
-        if (responseText) {
-            topicalAuthorityRoadmap = JSON.parse(responseText.trim());
-        } else {
-            throw new Error("Received empty response from Topical Authority agent.");
-        }
-    } catch (e) {
-        console.error("Error during Topical Authority Analysis phase:", e);
-        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-        throw new Error(`Agent 4 (Topical Authority Strategist) failed. Error: ${detailedError}`);
-    }
-
-
-    // --- AGENT 4.5: PRIORITIZATION ENGINE & CONTENT ARCHITECT ---
-    if (topicalAuthorityRoadmap) {
-        sendEvent({ type: 'progress', message: "Agente 4.5: Prioritizzazione della roadmap e creazione dei content brief..." });
+    for (const pillar of strategicPillars) {
+        sendEvent({ type: 'progress', message: `Analisi Gap per il Pillar: "${pillar}"...` });
         
-        const contentBriefSchema = {
-            type: Type.OBJECT,
-            properties: {
-            structure_suggestions: {
-                type: Type.ARRAY,
-                items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, title: { type: Type.STRING } } }
-            },
-            semantic_entities: { type: Type.ARRAY, items: { type: Type.STRING } },
-            key_questions_to_answer: { type: Type.ARRAY, items: { type: Type.STRING } },
-            internal_link_suggestions: {
-                type: Type.ARRAY,
-                items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, anchor_text: { type: Type.STRING }, rationale: { type: Type.STRING } } }
+        // Find all pages related to this pillar
+        const relevantClusters = thematic_clusters.filter(c => 
+            c.cluster_name.toLowerCase().includes(pillar.toLowerCase()) || 
+            pillar.toLowerCase().includes(c.cluster_name.toLowerCase())
+        );
+        const pillarPages = [...new Set(relevantClusters.flatMap(c => c.pages))];
+
+        const gapAnalysisPrompt = `
+          Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority per il sito "${site_root}".
+          
+          IL TUO COMPITO:
+          Eseguire un'analisi approfondita dei gap di contenuto per il **Pillar strategico: "${pillar}"**.
+          
+          CONTESTO:
+          1.  **Pagine Attuali del Sito per questo Pillar:**
+              ${pillarPages.length > 0 ? pillarPages.join('\n') : "Nessuna pagina specifica trovata per questo pillar, basati sulla tua conoscenza generale."}
+
+          ISTRUZIONI DETTAGLIATE:
+          1.  **Costruisci la Mappa Ideale (Mentalmente):** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale e completa per l'argomento "${pillar}". Questa mappa deve coprire tutto, dai concetti fondamentali ("101") agli argomenti più avanzati e di nicchia.
+          2.  **Esegui l'Analisi dei Gap:** Confronta l'elenco delle pagine attuali del sito con la tua mappa ideale. Identifica quali macro-argomenti (cluster) e quali articoli specifici mancano per raggiungere una copertura tematica completa.
+          3.  **Formula la Strategia:**
+              -   Scrivi uno \`strategic_summary\` che riassuma lo stato attuale della copertura del sito per questo pillar e l'importanza strategica di colmare i gap identificati.
+              -   Genera 2-3 \`cluster_suggestions\` mancanti. Per ogni cluster:
+                  -   Scrivi una \`strategic_rationale\` chiara.
+                  -   Suggerisci 2-4 \`article_suggestions\` (titoli di articoli) con le loro \`target_queries\` per costruire quel cluster.
+
+          REGOLE FINALI:
+          - Sii profondo e strategico. Non suggerire argomenti banali se il sito sembra già avanzato.
+          - La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
+        `;
+
+        try {
+            const gapResponse = await generateContentWithRetry(ai, {
+                model: "gemini-2.5-flash",
+                contents: gapAnalysisPrompt,
+                config: { responseMimeType: "application/json", responseSchema: gapAnalysisSchema, seed: 42 },
+            }, 4, 1000, onRetryCallback);
+
+            const responseText = gapResponse.text;
+            if (responseText) {
+                const pillarData = JSON.parse(responseText.trim());
+                pillarRoadmaps.push({
+                    pillar_name: pillar,
+                    ...pillarData
+                });
             }
-            },
-            required: ["structure_suggestions", "semantic_entities", "key_questions_to_answer", "internal_link_suggestions"]
-        };
-
-        for (let i = 0; i < topicalAuthorityRoadmap.cluster_suggestions.length; i++) {
-            const cluster = topicalAuthorityRoadmap.cluster_suggestions[i];
-            sendEvent({ type: 'progress', message: `Analisi impatto per cluster: "${cluster.cluster_name}"...` });
-
-            // Prioritization Engine
-            let totalVolume = 0;
-            let totalDifficulty = 0;
-            let queryCount = 0;
-            let opportunityConnection = false;
-            
-            if (seozoomApiKey) {
-                for (const article of cluster.article_suggestions) {
-                for (const query of article.target_queries) {
-                    try {
-                    const seoData = await seozoom.getKeywordData(query, seozoomApiKey);
-                    totalVolume += seoData.search_volume;
-                    totalDifficulty += seoData.keyword_difficulty;
-                    queryCount++;
-                    if (opportunity_hub_data.some(p => p.url.includes(query.split(' ')[0]))) opportunityConnection = true;
-                    } catch (e) { console.warn(`Could not fetch SEOZoom data for: ${query}`); }
-                }
-                }
-            }
-            
-            const avgDifficulty = queryCount > 0 ? totalDifficulty / queryCount : 100;
-            let score = 5.0;
-            score += (Math.log10(totalVolume + 1) * 0.5); // Boost for volume
-            score -= (avgDifficulty / 20); // Penalty for high difficulty
-            if (opportunityConnection) score += 1.5; // Boost if it connects to existing opportunities
-            cluster.impact_score = Math.max(1, Math.min(10, parseFloat(score.toFixed(1))));
-            cluster.impact_rationale = `Basato su un volume di ricerca stimato di ${totalVolume.toLocaleString()}, una difficoltà media di ${avgDifficulty.toFixed(0)}/100, e ${opportunityConnection ? 'una forte connessione con' : 'nessuna connessione diretta con'} le opportunità di crescita esistenti.`;
-
-            // Content Architect
-            for (let j = 0; j < cluster.article_suggestions.length; j++) {
-                const article = cluster.article_suggestions[j];
-                sendEvent({ type: 'progress', message: `Creazione brief per: "${article.title.substring(0,30)}..."` });
-
-                const contentArchitectPrompt = `
-                    Agisci come un SEO Content Strategist e Architetto dell'Informazione di livello mondiale.
-                    Il tuo compito è creare un brief di contenuto dettagliato e strategico per un nuovo articolo.
-                    
-                    CONTESTO SUL SITO ("${site_root}"):
-                    - Argomento Principale: ${topicalAuthorityRoadmap.main_topic}
-                    - Cluster Esistenti: ${thematic_clusters.map(c => c.cluster_name).join(', ')}
-                    - Pagine Rilevanti (URL con punteggio di autorità): ${page_diagnostics.slice(0, 20).map(p => `[${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
-
-                    ARTICOLO DA PIANIFICARE:
-                    - Titolo: "${article.title}"
-                    - Query Target Principali: ${article.target_queries.join(', ')}
-                    - Note Strategiche dalla SERP: ${serpAnalysisResult.competitor_analysis_summary}
-
-                    IL TUO COMPITO:
-                    Genera un brief di contenuto in formato JSON. Sii strategico e pratico, basandoti sui dati della SERP.
-                    
-                    ISTRUZIONI DETTAGLIATE:
-                    1.  \`structure_suggestions\`: Proponi una struttura logica (H2/H3) ispirata ai sotto-argomenti e alle domande utente emerse dall'analisi SERP.
-                    2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi.
-                    3.  \`key_questions_to_answer\`: Elenca le domande più importanti a cui l'articolo deve rispondere, prendendo spunto da "People Also Ask".
-                    4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito per rafforzare i cluster tematici.
-
-                    OUTPUT: La tua risposta DEVE essere un oggetto JSON valido in italiano.
-                `;
-                
-                try {
-                    const briefResponse = await generateContentWithRetry(ai, {
-                        model: "gemini-2.5-flash",
-                        contents: contentArchitectPrompt,
-                        config: { responseMimeType: "application/json", responseSchema: contentBriefSchema, seed: 42 },
-                    }, 4, 1000, onRetryCallback);
-
-                    if (briefResponse.text) {
-                        article.content_brief = JSON.parse(briefResponse.text.trim()) as ContentBrief;
-                    }
-                } catch (e) {
-                    console.error(`Content Architect failed for "${article.title}"`, e);
-                }
-            }
+        } catch(e) {
+            console.error(`Gap Analysis failed for pillar "${pillar}"`, e);
+            // Continue to the next pillar even if one fails
         }
-        sendEvent({ type: 'progress', message: `Agente 4.5 completo. Roadmap arricchita con punteggi e brief.` });
     }
 
-    if (!topicalAuthorityRoadmap) {
+    if (pillarRoadmaps.length === 0) {
         throw new Error("Impossibile generare la Topical Authority Roadmap per un motivo sconosciuto.");
     }
+    
+    sendEvent({ type: 'progress', message: `Analisi completata. Compilazione della roadmap finale.` });
 
-    return topicalAuthorityRoadmap;
+    // The function now returns an array of PillarRoadmap, but the old signature expected a single object.
+    // The API route will handle the array and the client will receive it.
+    // However, the function signature must match its return value.
+    // The calling function (in the API route) needs to be aware of this change.
+    return pillarRoadmaps;
 }
+
 
 
 export async function deepAnalysisFlow(options: {
