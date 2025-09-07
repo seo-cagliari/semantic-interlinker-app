@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap, TopicalClusterSuggestion, ContentBrief } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 
@@ -608,7 +608,107 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     options.sendEvent({ type: 'progress', message: `Agente 4 (Topical Authority Strategist) fallito. Procedo senza roadmap. Errore: ${detailedError}` });
   }
 
-  
+  // --- AGENT 4.5: PRIORITIZATION ENGINE & CONTENT ARCHITECT ---
+  if (topicalAuthorityRoadmap) {
+      options.sendEvent({ type: 'progress', message: "Agente 4.5: Prioritizzazione della roadmap e creazione dei content brief..." });
+      
+      const contentBriefSchema = {
+        type: Type.OBJECT,
+        properties: {
+          structure_suggestions: {
+            type: Type.ARRAY,
+            items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, title: { type: Type.STRING } } }
+          },
+          semantic_entities: { type: Type.ARRAY, items: { type: Type.STRING } },
+          key_questions_to_answer: { type: Type.ARRAY, items: { type: Type.STRING } },
+          internal_link_suggestions: {
+            type: Type.ARRAY,
+            items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, anchor_text: { type: Type.STRING }, rationale: { type: Type.STRING } } }
+          }
+        },
+        required: ["structure_suggestions", "semantic_entities", "key_questions_to_answer", "internal_link_suggestions"]
+      };
+
+      for (let i = 0; i < topicalAuthorityRoadmap.cluster_suggestions.length; i++) {
+          const cluster = topicalAuthorityRoadmap.cluster_suggestions[i];
+          options.sendEvent({ type: 'progress', message: `Analisi impatto per cluster: "${cluster.cluster_name}"...` });
+
+          // Prioritization Engine
+          let totalVolume = 0;
+          let totalDifficulty = 0;
+          let queryCount = 0;
+          let opportunityConnection = false;
+          
+          if (options.seozoomApiKey) {
+            for (const article of cluster.article_suggestions) {
+              for (const query of article.target_queries) {
+                try {
+                  const seoData = await seozoom.getKeywordData(query, options.seozoomApiKey);
+                  totalVolume += seoData.search_volume;
+                  totalDifficulty += seoData.keyword_difficulty;
+                  queryCount++;
+                  if (opportunityHubData.some(p => p.url.includes(query.split(' ')[0]))) opportunityConnection = true;
+                } catch (e) { console.warn(`Could not fetch SEOZoom data for: ${query}`); }
+              }
+            }
+          }
+          
+          const avgDifficulty = queryCount > 0 ? totalDifficulty / queryCount : 100;
+          let score = 5.0;
+          score += (Math.log10(totalVolume + 1) * 0.5); // Boost for volume
+          score -= (avgDifficulty / 20); // Penalty for high difficulty
+          if (opportunityConnection) score += 1.5; // Boost if it connects to existing opportunities
+          cluster.impact_score = Math.max(1, Math.min(10, parseFloat(score.toFixed(1))));
+          cluster.impact_rationale = `Basato su un volume di ricerca stimato di ${totalVolume.toLocaleString()}, una difficoltà media di ${avgDifficulty.toFixed(0)}/100, e ${opportunityConnection ? 'una forte connessione con' : 'nessuna connessione diretta con'} le opportunità di crescita esistenti.`;
+
+          // Content Architect
+          for (let j = 0; j < cluster.article_suggestions.length; j++) {
+              const article = cluster.article_suggestions[j];
+              options.sendEvent({ type: 'progress', message: `Creazione brief per: "${article.title.substring(0,30)}..."` });
+
+              const contentArchitectPrompt = `
+                Agisci come un SEO Content Strategist e Architetto dell'Informazione di livello mondiale.
+                Il tuo compito è creare un brief di contenuto dettagliato e strategico per un nuovo articolo.
+                
+                CONTESTO SUL SITO ("${options.site_root}"):
+                - Argomento Principale: ${topicalAuthorityRoadmap.main_topic}
+                - Cluster Esistenti: ${thematicClusters.map(c => c.cluster_name).join(', ')}
+                - Pagine Rilevanti (URL con punteggio di autorità): ${pageDiagnostics.slice(0, 20).map(p => `[${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+
+                ARTICOLO DA PIANIFICARE:
+                - Titolo: "${article.title}"
+                - Query Target Principali: ${article.target_queries.join(', ')}
+
+                IL TUO COMPITO:
+                Genera un brief di contenuto in formato JSON. Sii strategico e pratico.
+                
+                ISTRUZIONI DETTAGLIATE:
+                1.  \`structure_suggestions\`: Proponi una struttura logica per l'articolo usando una gerarchia di H2 e H3.
+                2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi per garantire una copertura completa.
+                3.  \`key_questions_to_answer\`: Identifica le domande principali che gli utenti si pongono su questo argomento. L'articolo deve rispondere a queste domande.
+                4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito (usa l'elenco fornito) per rafforzare i cluster tematici.
+
+                OUTPUT: La tua risposta DEVE essere un oggetto JSON valido in italiano.
+              `;
+              
+              try {
+                  const briefResponse = await generateContentWithRetry(ai, {
+                      model: "gemini-2.5-flash",
+                      contents: contentArchitectPrompt,
+                      config: { responseMimeType: "application/json", responseSchema: contentBriefSchema, seed: 42 },
+                  }, 4, 1000, onRetryCallback);
+
+                  if (briefResponse.text) {
+                      article.content_brief = JSON.parse(briefResponse.text.trim()) as ContentBrief;
+                  }
+              } catch (e) {
+                  console.error(`Content Architect failed for "${article.title}"`, e);
+              }
+          }
+      }
+      options.sendEvent({ type: 'progress', message: `Agente 4.5 completo. Roadmap arricchita con punteggi e brief.` });
+  }
+
   options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
 
   const finalReport: Report = {

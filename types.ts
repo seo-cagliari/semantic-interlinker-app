@@ -63,17 +63,28 @@ export type ContentGapSuggestion = {
   search_intent?: string;
 };
 
+// --- Tipi per il Content Architect ---
+export type ContentBrief = {
+  structure_suggestions: { type: 'h2' | 'h3'; title: string }[];
+  semantic_entities: string[];
+  key_questions_to_answer: string[];
+  internal_link_suggestions: { target_url: string; anchor_text: string; rationale: string }[];
+};
+
 // --- Tipi per la Topical Authority Roadmap ---
 
 export type TopicalArticleSuggestion = {
   title: string;
   target_queries: string[];
+  content_brief?: ContentBrief;
 };
 
 export type TopicalClusterSuggestion = {
   cluster_name: string;
   strategic_rationale: string;
   article_suggestions: TopicalArticleSuggestion[];
+  impact_score?: number; // Punteggio da 1 a 10
+  impact_rationale?: string; // Spiegazione del punteggio
 };
 
 export type TopicalAuthorityRoadmap = {
