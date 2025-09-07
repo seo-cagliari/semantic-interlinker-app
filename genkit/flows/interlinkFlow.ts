@@ -361,7 +361,8 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
     3. USA I DATI COMPORTAMENTALI: Sfrutta i dati GA4 per decisioni strategiche.
        - Pagine con alto tasso di conversione o engagement sono preziose. Suggerisci link VERSO di esse per capitalizzare sul loro successo.
        - Pagine con molto traffico ma basso engagement o poche conversioni sono 'punti deboli'. Suggerisci link DA esse verso pagine più performanti.
-    4. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
+    4. PUNTEGGIO STRATEGICO: Assegna uno 'score' da 0.0 a 1.0. Un punteggio > 0.75 è per suggerimenti che collegano pagine con alta autorità a pagine con alto potenziale di business (identificate tramite GA4 o query GSC a basso CTR), o che rafforzano significativamente una 'Pillar Page' o 'Money Page' secondo la strategia attiva.
+    5. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
   `;
 
     const suggestionSchema = {
@@ -384,6 +385,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
                 position_hint: { type: Type.STRING },
                 reason: { type: Type.STRING },
               },
+              required: ["block_type", "position_hint", "reason"],
             },
             semantic_rationale: {
               type: Type.OBJECT,
@@ -392,6 +394,7 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
                 entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
                 intent_alignment_comment: { type: Type.STRING, description: "Commento sulla coerenza dell'intento di ricerca." }
               },
+              required: ["topic_match", "entities_in_common"],
             },
             risk_checks: {
               type: Type.OBJECT,
@@ -405,15 +408,21 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
                   },
                   description: "Dettagli sulla cannibalizzazione." 
                 }
-              }
+              },
+              required: ["potential_cannibalization"],
             },
             score: { type: Type.NUMBER },
             notes: { type: Type.STRING },
             apply_mode: { type: Type.STRING },
           },
+          required: [
+            "suggestion_id", "source_url", "target_url", "proposed_anchor",
+            "insertion_hint", "semantic_rationale", "risk_checks", "score"
+          ],
         },
       },
     },
+    required: ["suggestions"],
   };
   
   let reportSuggestions: Suggestion[] = [];

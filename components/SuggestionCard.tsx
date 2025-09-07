@@ -120,7 +120,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
           </div>
           <div className="flex items-start gap-2">
             <MapPinIcon className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
-            <div><b className="font-semibold">Posizione:</b> {insertion_hint.position_hint} ({insertion_hint.block_type})</div>
+            <div><b className="font-semibold">Posizione:</b> {insertion_hint?.position_hint || 'N/A'} ({insertion_hint?.block_type || 'N/A'})</div>
           </div>
         </div>
         <div className="space-y-3 bg-slate-50 p-3 rounded-lg">

@@ -75,8 +75,8 @@ export const ModificationModal = (props: ModificationModalProps) => {
              <label className="text-sm font-semibold text-slate-600 block mb-1">2. Inserisci il link nella pagina sorgente</label>
              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-slate-700">
                 <p><strong className="font-semibold">Pagina da modificare:</strong> <a href={suggestion.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{suggestion.source_url}</a></p>
-                <p className="mt-2"><strong className="font-semibold">Istruzioni AI:</strong> {suggestion.insertion_hint.position_hint} ({suggestion.insertion_hint.block_type})</p>
-                <p className="mt-1 text-xs text-slate-500"><strong>Motivo:</strong> {suggestion.insertion_hint.reason}</p>
+                <p className="mt-2"><strong className="font-semibold">Istruzioni AI:</strong> {suggestion.insertion_hint?.position_hint || 'Nessun suggerimento specifico.'} ({suggestion.insertion_hint?.block_type || 'N/A'})</p>
+                <p className="mt-1 text-xs text-slate-500"><strong>Motivo:</strong> {suggestion.insertion_hint?.reason || 'Nessun motivo specificato.'}</p>
              </div>
           </div>
         </div>
