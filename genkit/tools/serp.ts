@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SerpAnalysisResult, SerpPageData } from '../../types';
 
 // Helper to fetch and parse content with a timeout
-const fetchWithTimeout = async (url: string, timeout = 5000): Promise<string> => {
+const fetchWithTimeout = async (url: string, timeout = 8000): Promise<string> => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -67,9 +67,8 @@ export const serpAnalyzer = {
             throw new Error(`Impossibile recuperare i dati della SERP. Controlla la tua chiave API SerpApi e i crediti. Dettagli: ${e instanceof Error ? e.message : 'Errore sconosciuto'}`);
         }
 
-        // --- PHASE 2: SCRAPE AND ANALYZE TOP URLs ---
-        if (onProgress) onProgress(`Analisi dei contenuti per ${organicResults.length} pagine top-ranking...`);
-        const scrapedPagesData: SerpPageData[] = [];
+        // --- PHASE 2: SCRAPE AND ANALYZE TOP URLs (IN PARALLEL) ---
+        if (onProgress) onProgress(`Analisi in parallelo per ${organicResults.length} pagine top-ranking...`);
         
         const pageScraperSchema = {
             type: Type.OBJECT,
@@ -89,40 +88,50 @@ export const serpAnalyzer = {
             required: ["headings"]
         };
         
-        for (let i = 0; i < organicResults.length; i++) {
-            const result = organicResults[i];
+        const analysisPromises = organicResults.map((result) => (async () => {
             const url = result.link;
-            try {
-                if (onProgress) onProgress(`Scansione ${i + 1}/${organicResults.length}: ${url.substring(0, 50)}...`);
-                const htmlContent = await fetchWithTimeout(url);
-                const textContent = stripHtml(htmlContent).substring(0, 12000);
+            const htmlContent = await fetchWithTimeout(url);
+            const textContent = stripHtml(htmlContent).substring(0, 12000);
 
-                const analysisPrompt = `
-                    Analizza il seguente contenuto testuale di una pagina web. Il tuo unico compito è estrarre tutti i titoli H2 e H3 in ordine di apparizione.
-                    Fornisci solo i titoli, senza commenti aggiuntivi.
-                    ---
-                    ${textContent}
-                    ---
-                `;
-                
-                const response = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
-                    contents: analysisPrompt,
-                    config: { responseMimeType: "application/json", responseSchema: pageScraperSchema, seed: 42 }
-                });
+            const analysisPrompt = `
+                Analizza il seguente contenuto testuale di una pagina web. Il tuo unico compito è estrarre tutti i titoli H2 e H3 in ordine di apparizione.
+                Fornisci solo i titoli, senza commenti aggiuntivi.
+                ---
+                ${textContent}
+                ---
+            `;
+            
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: analysisPrompt,
+                config: { responseMimeType: "application/json", responseSchema: pageScraperSchema, seed: 42 }
+            });
 
-                if(response.text) {
-                    const parsed = JSON.parse(response.text.trim());
-                    scrapedPagesData.push({
-                        url: url,
-                        title: result.title,
-                        headings: parsed.headings.filter((h: any) => h.type === 'h2' || h.type === 'h3'),
-                    });
-                }
-            } catch (error) {
-                console.warn(`[SERP Analyzer] Failed to scrape or analyze ${url}:`, error);
+            if(response.text) {
+                const parsed = JSON.parse(response.text.trim());
+                return {
+                    url: url,
+                    title: result.title,
+                    headings: parsed.headings.filter((h: any) => h.type === 'h2' || h.type === 'h3'),
+                } as SerpPageData;
             }
-        }
+            throw new Error("Empty response from Gemini for page analysis");
+        })());
+
+        const settledResults = await Promise.allSettled(analysisPromises);
+        const scrapedPagesData: SerpPageData[] = [];
+        
+        settledResults.forEach((result, i) => {
+            if (onProgress) onProgress(`Scansione ${i + 1}/${organicResults.length} completata...`);
+            if (result.status === 'fulfilled') {
+                scrapedPagesData.push(result.value);
+            } else {
+                console.warn(`[SERP Analyzer] Failed to scrape or analyze ${organicResults[i].link}:`, result.reason);
+            }
+        });
+        
+        if (onProgress) onProgress(`Analisi competitor completata. ${scrapedPagesData.length}/${organicResults.length} pagine analizzate con successo.`);
+
 
         if (scrapedPagesData.length === 0) {
             throw new Error("Could not scrape any of the top-ranking pages. This might be due to anti-scraping measures on the target sites.");
