@@ -1,4 +1,5 @@
 
+
 import { topicalAuthorityFlow } from '../../../genkit/flows/interlinkFlow';
 import { ThematicCluster, PageDiagnostic, OpportunityPage, TopicalAuthorityRoadmap } from '../../../types';
 import { NextRequest, NextResponse } from 'next/server';
@@ -21,16 +22,26 @@ export async function POST(req: NextRequest) {
 
       try {
         const body = await req.json();
-        const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, seozoomApiKey } = body as {
+        const { 
+          site_root, 
+          thematic_clusters, 
+          page_diagnostics, 
+          opportunity_hub_data, 
+          mainTopic,
+          serpApiKey,
+          seozoomApiKey 
+        } = body as {
           site_root: string;
           thematic_clusters: ThematicCluster[];
           page_diagnostics: PageDiagnostic[];
           opportunity_hub_data: OpportunityPage[];
+          mainTopic: string;
+          serpApiKey: string;
           seozoomApiKey?: string;
         };
 
-        if (!site_root || !thematic_clusters || !page_diagnostics) {
-          throw new Error('site_root, thematic_clusters, and page_diagnostics are required.');
+        if (!site_root || !thematic_clusters || !page_diagnostics || !mainTopic || !serpApiKey) {
+          throw new Error('site_root, thematic_clusters, page_diagnostics, mainTopic, and serpApiKey are required.');
         }
 
         const roadmap: TopicalAuthorityRoadmap = await topicalAuthorityFlow({
@@ -38,6 +49,8 @@ export async function POST(req: NextRequest) {
           thematic_clusters,
           page_diagnostics,
           opportunity_hub_data,
+          mainTopic,
+          serpApiKey,
           seozoomApiKey,
           sendEvent,
         });

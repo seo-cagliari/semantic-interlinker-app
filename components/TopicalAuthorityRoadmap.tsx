@@ -1,8 +1,108 @@
 
+
 import React, { useState } from 'react';
 import { TopicalAuthorityRoadmap as TopicalAuthorityRoadmapType, ContentBrief } from '../types';
-import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon } from './Icons';
+import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon } from './Icons';
 import { ContentBriefModal } from './ContentBriefModal';
+
+interface TopicalAuthorityGeneratorProps {
+    onGenerate: (mainTopic: string, serpApiKey: string) => void;
+    isLoading: boolean;
+    error: string | null;
+    loadingMessage: string;
+    initialApiKey: string;
+}
+
+export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps) => {
+    const { onGenerate, isLoading, error, loadingMessage, initialApiKey } = props;
+    const [mainTopic, setMainTopic] = useState('');
+    const [serpApiKey, setSerpApiKey] = useState(initialApiKey);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const handleSubmit = () => {
+        setFormError(null);
+        if (!mainTopic.trim()) {
+            setFormError("L'argomento principale è obbligatorio.");
+            return;
+        }
+        if (!serpApiKey.trim()) {
+            setFormError("La chiave API per l'analisi SERP è obbligatoria.");
+            return;
+        }
+        onGenerate(mainTopic, serpApiKey);
+    };
+
+    if (isLoading) {
+        return (
+            <div className="text-center py-16 flex flex-col items-center">
+                <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Generazione della Roadmap in corso...</h3>
+                <p className="text-slate-500 max-w-md animate-fade-in-up" key={loadingMessage}>
+                    {loadingMessage}
+                </p>
+            </div>
+        );
+    }
+    
+    if (error) {
+         return (
+             <div className="text-center py-12 px-6 bg-red-50 rounded-2xl border border-red-200">
+                <XCircleIcon className="w-10 h-10 mx-auto text-red-400 mb-3" />
+                <h3 className="text-xl font-bold text-red-800">Errore durante l'analisi</h3>
+                <p className="max-w-xl mx-auto text-red-700 mt-2 mb-6 text-sm">{error}</p>
+                <button 
+                    onClick={handleSubmit}
+                    className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                    Riprova
+                </button>
+             </div>
+         );
+    }
+
+    return (
+        <div className="text-center py-12 px-6 bg-slate-50 rounded-2xl border border-slate-200">
+            <MapIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
+            <h3 className="text-xl font-bold text-slate-800">Sblocca la tua Topical Authority Roadmap</h3>
+            <p className="max-w-2xl mx-auto text-slate-600 mt-2 mb-6">
+                Avvia un'analisi strategica basata sui dati della SERP. Fornisci l'argomento principale che vuoi dominare e una chiave API di <a href="https://serpapi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-semibold hover:underline">SerpApi</a> per analizzare i tuoi competitor in tempo reale.
+            </p>
+            <div className="max-w-lg mx-auto space-y-4 text-left">
+                <div>
+                    <label htmlFor="mainTopic" className="block text-sm font-medium text-slate-700 mb-1">Argomento Principale</label>
+                    <input 
+                        type="text" 
+                        id="mainTopic"
+                        value={mainTopic}
+                        onChange={(e) => setMainTopic(e.target.value)}
+                        placeholder="Es. assicurazione auto elettriche"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                    />
+                </div>
+                 <div>
+                    <label htmlFor="serpApiKey" className="block text-sm font-medium text-slate-700 mb-1">Chiave API SerpApi</label>
+                    <input 
+                        type="password" 
+                        id="serpApiKey"
+                        value={serpApiKey}
+                        onChange={(e) => setSerpApiKey(e.target.value)}
+                        placeholder="Incolla qui la tua chiave API"
+                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                    />
+                </div>
+            </div>
+             {formError && <p className="text-red-600 text-sm mt-3">{formError}</p>}
+            <button 
+                onClick={handleSubmit}
+                className="mt-6 bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+            >
+                <BrainCircuitIcon className="w-5 h-5" />
+                Genera Roadmap con Analisi SERP
+            </button>
+        </div>
+    );
+};
+
 
 interface TopicalAuthorityRoadmapProps {
   roadmap: TopicalAuthorityRoadmapType;
@@ -55,11 +155,11 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-2">
-                  <h3 className="text-sm font-semibold uppercase text-slate-500 mb-1">Argomento Principale Identificato</h3>
+                  <h3 className="text-sm font-semibold uppercase text-slate-500 mb-1">Argomento Principale Analizzato</h3>
                   <p className="text-lg font-bold text-blue-700">{roadmap.main_topic}</p>
               </div>
               <div>
-                  <h3 className="text-sm font-semibold uppercase text-slate-500 mb-2">Punteggio Copertura Attuale</h3>
+                  <h3 className="text-sm font-semibold uppercase text-slate-500 mb-2">Punteggio Copertura (vs SERP)</h3>
                   <div className="flex items-center gap-3">
                       <CoverageMeter score={roadmap.coverage_score} />
                       <span className="font-bold text-lg text-slate-800">{roadmap.coverage_score}/100</span>
@@ -68,7 +168,7 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
           </div>
         </div>
         
-        <h3 className="text-xl font-semibold text-slate-800 mb-4">Cluster di Contenuti Mancanti:</h3>
+        <h3 className="text-xl font-semibold text-slate-800 mb-4">Cluster di Contenuti Mancanti (Gap vs Competitor):</h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {(roadmap.cluster_suggestions || []).map((cluster, index) => (

@@ -1,7 +1,8 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap, TopicalClusterSuggestion, ContentBrief } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, TopicalAuthorityRoadmap, TopicalClusterSuggestion, ContentBrief, SerpAnalysisResult } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
+import { serpAnalyzer } from '../tools/serp';
 
 /**
  * A wrapper function for ai.models.generateContent that implements an exponential backoff retry mechanism.
@@ -608,36 +609,60 @@ export async function topicalAuthorityFlow(options: {
   thematic_clusters: ThematicCluster[];
   page_diagnostics: PageDiagnostic[];
   opportunity_hub_data: OpportunityPage[];
+  mainTopic: string;
+  serpApiKey: string;
   seozoomApiKey?: string;
   sendEvent: (event: object) => void;
 }): Promise<TopicalAuthorityRoadmap> {
-    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, seozoomApiKey, sendEvent } = options;
+    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, mainTopic, serpApiKey, seozoomApiKey, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const onRetryCallback = (attempt: number, delay: number) => {
         sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
     };
 
-    // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST ---
+    // --- AGENT 5: SERP ANALYST ---
+    sendEvent({ type: 'progress', message: "Agente 5: L'Analista SERP sta esaminando i competitor..." });
+    let serpAnalysisResult: SerpAnalysisResult;
+    try {
+        serpAnalysisResult = await serpAnalyzer.getSerpAnalysis(mainTopic, serpApiKey, (progressMessage) => {
+            sendEvent({ type: 'progress', message: progressMessage });
+        });
+    } catch (e) {
+        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+        throw new Error(`Agent 5 (SERP Analyst) failed. Error: ${detailedError}`);
+    }
+
+    // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST (UPGRADED) ---
     sendEvent({ type: 'progress', message: "Agente 4: Lo Stratega di Topical Authority sta costruendo la tua roadmap..." });
     let topicalAuthorityRoadmap: TopicalAuthorityRoadmap | undefined = undefined;
 
     const topicalAuthorityPrompt = `
-      Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority e SEO semantica, seguendo i principi di Koray Tuğberk Gürbüz.
+      Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority e SEO semantica.
       
-      CONTESTO:
-      Stai analizzando il sito "${site_root}". La tua analisi ha già prodotto i seguenti cluster tematici, che rappresentano la conoscenza attuale del sito:
-      ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
-      
+      CONTESTO CRUCIALE:
+      Stai analizzando il sito "${site_root}". Il tuo obiettivo è renderlo un'autorità per l'argomento principale: "${mainTopic}".
+
+      1.  **Stato Attuale del Sito:** Questi sono i cluster tematici che il sito copre attualmente.
+          ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+
+      2.  **Mappa Tematica Ideale (Basata su Dati SERP Reali):** Hai appena eseguito un'analisi in tempo reale della SERP di Google per "${mainTopic}". Questa è la mappa di ciò che Google sta premiando ORA.
+          -   **Sotto-argomenti chiave (estratti dai titoli H2/H3 dei top competitor):** ${serpAnalysisResult.ideal_topical_map.sub_topics.join(', ')}
+          -   **Domande degli utenti (da "People Also Ask"):** ${serpAnalysisResult.ideal_topical_map.user_questions.join(', ')}
+          -   **Ricerche Correlate:** ${serpAnalysisResult.ideal_topical_map.related_searches.join(', ')}
+          -   **Sintesi dell'Analisi dei Competitor:** ${serpAnalysisResult.competitor_analysis_summary}
+
       IL TUO COMPITO:
-      Creare una "Topical Authority Roadmap" strategica e approfondita.
-      Il tuo compito è duplice: se il sito è nuovo o ha pochi contenuti, delinea una **mappa tematica fondamentale completa** partendo da zero. Se il sito è maturo, identifica le **lacune strategiche più profonde** e i cluster adiacenti per espandere l'autorità.
+      Crea una "Topical Authority Roadmap" eseguendo un **confronto diretto e chirurgico** tra lo stato attuale del sito e la mappa tematica ideale basata sui dati della SERP.
       
       ISTRUZIONI:
-      1. SINTETIZZA L'ARGOMENTO PRINCIPALE: Basandoti sui cluster esistenti, identifica e dichiara il 'main_topic' del sito in una frase chiara.
-      2. VALUTA LA COPERTURA ATTUALE: Estrapola le entità e i concetti coperti dai cluster. Assegna un 'coverage_score' da 0 a 100 che rappresenti la completezza tematica attuale. Un punteggio alto (90+) significa che il sito copre quasi tutto. Un punteggio basso (<50) indica molte lacune.
-      3. IDENTIFICA I CLUSTER MANCANTI: Confronta la conoscenza attuale del sito con una mappa semantica ideale per il 'main_topic'. Identifica 2-4 cluster concettuali di alto livello che sono completamente assenti o trattati in modo superficiale.
-      4. GENERA SUGGERIMENTI DI CONTENUTO: Per ogni cluster mancante, fornisci una 'strategic_rationale' che spieghi perché quel cluster è **essenziale per la completezza semantica** e come si collega agli obiettivi di business. Suggerisci 2-3 titoli di articoli ('article_suggestions') **estremamente specifici e orientati all'azione**, non generici. Includi le 'target_queries' per ogni articolo.
+      1.  **Conferma l'Argomento Principale:** Dichiara il 'main_topic' come "${mainTopic}".
+      2.  **Valuta la Copertura (Data-Driven):** Basandoti sul confronto, assegna un 'coverage_score' da 0 a 100 che rappresenti quanto bene i cluster attuali del sito coprono i sotto-argomenti e le domande della mappa ideale.
+      3.  **Identifica i Cluster Mancanti (Gap Analysis):** Identifica 2-4 cluster concettuali di alto livello che sono presenti nella mappa ideale ma assenti (o trattati superficialmente) sul sito. Questi sono i tuoi content gap più importanti.
+      4.  **Genera Suggerimenti di Contenuto (Azionabili):** Per ogni cluster mancante, fornisci:
+          -   Una 'strategic_rationale' che spieghi perché quel cluster è essenziale per colmare il gap rispetto a ciò che la SERP sta premiando.
+          -   2-3 titoli di articoli ('article_suggestions') **estremamente specifici e basati sui dati SERP** (sotto-argomenti, domande utente).
+          -   Le 'target_queries' pertinenti per ogni articolo.
       
       OUTPUT:
       La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
@@ -764,15 +789,16 @@ export async function topicalAuthorityFlow(options: {
                     ARTICOLO DA PIANIFICARE:
                     - Titolo: "${article.title}"
                     - Query Target Principali: ${article.target_queries.join(', ')}
+                    - Note Strategiche dalla SERP: ${serpAnalysisResult.competitor_analysis_summary}
 
                     IL TUO COMPITO:
-                    Genera un brief di contenuto in formato JSON. Sii strategico e pratico.
+                    Genera un brief di contenuto in formato JSON. Sii strategico e pratico, basandoti sui dati della SERP.
                     
                     ISTRUZIONI DETTAGLIATE:
-                    1.  \`structure_suggestions\`: Proponi una struttura logica per l'articolo usando una gerarchia di H2 e H3.
-                    2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi per garantire una copertura completa.
-                    3.  \`key_questions_to_answer\`: Identifica le domande principali che gli utenti si pongono su questo argomento. L'articolo deve rispondere a queste domande.
-                    4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito (usa l'elenco fornito) per rafforzare i cluster tematici.
+                    1.  \`structure_suggestions\`: Proponi una struttura logica (H2/H3) ispirata ai sotto-argomenti e alle domande utente emerse dall'analisi SERP.
+                    2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi.
+                    3.  \`key_questions_to_answer\`: Elenca le domande più importanti a cui l'articolo deve rispondere, prendendo spunto da "People Also Ask".
+                    4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito per rafforzare i cluster tematici.
 
                     OUTPUT: La tua risposta DEVE essere un oggetto JSON valido in italiano.
                 `;
@@ -796,8 +822,6 @@ export async function topicalAuthorityFlow(options: {
     }
 
     if (!topicalAuthorityRoadmap) {
-        // Questo caso teoricamente non dovrebbe essere raggiunto grazie alla logica try/catch precedente,
-        // ma soddisfa TypeScript e protegge da risposte vuote/malformate inaspettate dall'AI.
         throw new Error("Impossibile generare la Topical Authority Roadmap per un motivo sconosciuto.");
     }
 

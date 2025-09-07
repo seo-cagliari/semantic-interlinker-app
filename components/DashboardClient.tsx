@@ -11,6 +11,8 @@ import { Filters } from './SuggestionFilters';
 import { ProgressDashboard } from './ProgressDashboard';
 
 const SEOZOOM_API_KEY_STORAGE_KEY = 'semantic-interlinker-seozoom-api-key';
+const SERP_API_KEY_STORAGE_KEY = 'semantic-interlinker-serp-api-key';
+
 
 type View = 'connect' | 'loading' | 'report' | 'progress';
 
@@ -27,6 +29,7 @@ export default function DashboardClient() {
   const [site, setSite] = useState<string | null>(null);
   const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [seozoomApiKey, setSeozoomApiKey] = useState<string>('');
+  const [serpApiKey, setSerpApiKey] = useState<string>('');
   
   const [view, setView] = useState<View>('connect');
   const [error, setError] = useState<string | null>(null);
@@ -79,14 +82,17 @@ export default function DashboardClient() {
           }
       }
 
-      const savedKey = window.localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
-      setSeozoomApiKey(savedKey);
+      const savedSeozoomKey = window.localStorage.getItem(SEOZOOM_API_KEY_STORAGE_KEY) || '';
+      setSeozoomApiKey(savedSeozoomKey);
+      const savedSerpKey = window.localStorage.getItem(SERP_API_KEY_STORAGE_KEY) || '';
+      setSerpApiKey(savedSerpKey);
 
     } catch (e) {
       console.error("Failed to load state from localStorage:", e);
       setSite(null);
       setSavedReport(null);
       setSeozoomApiKey('');
+      setSerpApiKey('');
     } finally {
         setIsLoadedFromStorage(true);
     }
@@ -125,11 +131,12 @@ export default function DashboardClient() {
     if (isLoadedFromStorage) {
         try {
             window.localStorage.setItem(SEOZOOM_API_KEY_STORAGE_KEY, seozoomApiKey);
+            window.localStorage.setItem(SERP_API_KEY_STORAGE_KEY, serpApiKey);
         } catch (e) {
-            console.error("Failed to persist SEOZoom API key to localStorage:", e);
+            console.error("Failed to persist API keys to localStorage:", e);
         }
     }
-  }, [seozoomApiKey, isLoadedFromStorage]);
+  }, [seozoomApiKey, serpApiKey, isLoadedFromStorage]);
   
   const report = useMemo(() => savedReport?.report ?? null, [savedReport]);
 
@@ -316,12 +323,17 @@ export default function DashboardClient() {
     }
   }, [savedReport]);
 
-  const handleGenerateTopicalAuthority = useCallback(async () => {
+  const handleGenerateTopicalAuthority = useCallback(async (mainTopic: string, currentSerpApiKey: string) => {
     if (!report) return;
 
     setIsTopicalAuthorityLoading(true);
     setTopicalAuthorityError(null);
     setTopicalAuthorityLoadingMessage("Avvio dello stratega di Topical Authority...");
+    
+    // Also persist the key if it's different
+    if (currentSerpApiKey !== serpApiKey) {
+        setSerpApiKey(currentSerpApiKey);
+    }
 
     try {
         const response = await fetch('/api/topical-authority', {
@@ -332,6 +344,8 @@ export default function DashboardClient() {
                 thematic_clusters: report.thematic_clusters,
                 page_diagnostics: report.page_diagnostics,
                 opportunity_hub_data: report.opportunity_hub || [],
+                mainTopic: mainTopic,
+                serpApiKey: currentSerpApiKey,
                 seozoomApiKey: seozoomApiKey,
             })
         });
@@ -380,7 +394,7 @@ export default function DashboardClient() {
     } finally {
       setIsTopicalAuthorityLoading(false);
     }
-  }, [report, seozoomApiKey]);
+  }, [report, seozoomApiKey, serpApiKey]);
 
     const handleGenerateContentStrategy = useCallback(async () => {
         if (!report) return;
@@ -537,6 +551,7 @@ export default function DashboardClient() {
                         isTopicalAuthorityLoading={isTopicalAuthorityLoading}
                         topicalAuthorityError={topicalAuthorityError}
                         topicalAuthorityLoadingMessage={topicalAuthorityLoadingMessage}
+                        initialSerpApiKey={serpApiKey}
                         onGenerateContentStrategy={handleGenerateContentStrategy}
                         isContentStrategyLoading={isContentStrategyLoading}
                         contentStrategyError={contentStrategyError}

@@ -1,4 +1,5 @@
 
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -203,6 +204,24 @@ export type ProgressReport = {
 export type SavedReport = {
   report: Report;
   timestamp: number;
+};
+
+// --- Tipi per l'Analisi SERP ---
+
+export type SerpPageData = {
+    url: string;
+    title: string;
+    headings: { type: 'h2' | 'h3'; text: string }[];
+};
+
+export type SerpAnalysisResult = {
+    ideal_topical_map: {
+        main_topic: string;
+        sub_topics: string[];
+        user_questions: string[];
+        related_searches: string[];
+    };
+    competitor_analysis_summary: string;
 };
 
 // --- Tipo principale del Report ---

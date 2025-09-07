@@ -9,7 +9,7 @@ import { OpportunityHub } from './OpportunityHub';
 import { ThematicClusters } from './ThematicClusters';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
-import { TopicalAuthorityRoadmap } from './TopicalAuthorityRoadmap';
+import { TopicalAuthorityRoadmap, TopicalAuthorityGenerator } from './TopicalAuthorityRoadmap';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -33,10 +33,11 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
-  onGenerateTopicalAuthority: () => void;
+  onGenerateTopicalAuthority: (mainTopic: string, serpApiKey: string) => void;
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;
+  initialSerpApiKey: string;
   onGenerateContentStrategy: () => void;
   isContentStrategyLoading: boolean;
   contentStrategyError: string | null;
@@ -62,6 +63,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       isTopicalAuthorityLoading,
       topicalAuthorityError,
       topicalAuthorityLoadingMessage,
+      initialSerpApiKey,
       onGenerateContentStrategy,
       isContentStrategyLoading,
       contentStrategyError,
@@ -207,35 +209,13 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
                 {report.topical_authority_roadmap ? (
                     <TopicalAuthorityRoadmap roadmap={report.topical_authority_roadmap} />
                 ) : (
-                    <div className="text-center py-12 px-6 bg-slate-50 rounded-2xl border border-slate-200">
-                        <MapIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
-                        <h3 className="text-xl font-bold text-slate-800">Sblocca la tua Topical Authority Roadmap</h3>
-                        <p className="max-w-xl mx-auto text-slate-600 mt-2 mb-6">
-                            Avvia un'analisi strategica approfondita per scoprire i cluster di contenuti mancanti, ricevere suggerimenti per nuovi articoli e ottenere un piano d'azione per diventare un'autorità nel tuo settore.
-                        </p>
-                        {!isTopicalAuthorityLoading ? (
-                            <button 
-                                onClick={onGenerateTopicalAuthority}
-                                className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mx-auto"
-                            >
-                                <BrainCircuitIcon className="w-5 h-5" />
-                                Genera Roadmap Strategica
-                            </button>
-                        ) : (
-                            <div className="flex flex-col items-center">
-                                <LoadingSpinnerIcon className="w-8 h-8 text-blue-600 mb-3" />
-                                <p className="text-slate-500 font-semibold animate-fade-in-up" key={topicalAuthorityLoadingMessage}>
-                                    {topicalAuthorityLoadingMessage}
-                                </p>
-                            </div>
-                        )}
-                        {topicalAuthorityError && (
-                            <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
-                                <XCircleIcon className="w-5 h-5" />
-                                <p className="text-sm">{topicalAuthorityError}</p>
-                            </div>
-                        )}
-                    </div>
+                   <TopicalAuthorityGenerator
+                        onGenerate={onGenerateTopicalAuthority}
+                        isLoading={isTopicalAuthorityLoading}
+                        error={topicalAuthorityError}
+                        loadingMessage={topicalAuthorityLoadingMessage}
+                        initialApiKey={initialSerpApiKey}
+                   />
                 )}
             </TabsContent>
 
