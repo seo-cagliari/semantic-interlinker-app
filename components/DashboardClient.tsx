@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, TopicalAuthorityRoadmap } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -51,6 +51,10 @@ export default function DashboardClient() {
   const [progressReport, setProgressReport] = useState<ProgressReport | null>(null);
   const [isProgressLoading, setIsProgressLoading] = useState<boolean>(false);
   const [progressError, setProgressError] = useState<string | null>(null);
+  
+  const [isTopicalAuthorityLoading, setIsTopicalAuthorityLoading] = useState<boolean>(false);
+  const [topicalAuthorityError, setTopicalAuthorityError] = useState<string | null>(null);
+  const [topicalAuthorityLoadingMessage, setTopicalAuthorityLoadingMessage] = useState<string>('');
 
   const abortControllerRef = useRef<AbortController | null>(null);
   
@@ -308,6 +312,72 @@ export default function DashboardClient() {
         setIsProgressLoading(false);
     }
   }, [savedReport]);
+
+  const handleGenerateTopicalAuthority = useCallback(async () => {
+    if (!report) return;
+
+    setIsTopicalAuthorityLoading(true);
+    setTopicalAuthorityError(null);
+    setTopicalAuthorityLoadingMessage("Avvio dello stratega di Topical Authority...");
+
+    try {
+        const response = await fetch('/api/topical-authority', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                site_root: report.site,
+                thematic_clusters: report.thematic_clusters,
+                page_diagnostics: report.page_diagnostics,
+                opportunity_hub_data: report.opportunity_hub || [],
+                seozoomApiKey: seozoomApiKey,
+            })
+        });
+
+        if (!response.ok || !response.body) {
+            const errorData = await response.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
+            throw new Error(errorData.details || `Server responded with status ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'progress') {
+                setTopicalAuthorityLoadingMessage(event.message);
+              } else if (event.type === 'done') {
+                const roadmap: TopicalAuthorityRoadmap = event.payload;
+                setSavedReport(prev => {
+                    if (!prev) return null;
+                    const updatedReport: Report = { ...prev.report, topical_authority_roadmap: roadmap };
+                    return { ...prev, report: updatedReport };
+                });
+              } else if (event.type === 'error') {
+                throw new Error(event.details || event.error);
+              }
+            } catch (e) {
+              console.error("Failed to parse topical authority stream chunk:", line, e);
+            }
+          }
+        }
+
+    } catch (err) {
+      setTopicalAuthorityError(err instanceof Error ? err.message : 'Si è verificato un errore sconosciuto durante la generazione della roadmap.');
+    } finally {
+      setIsTopicalAuthorityLoading(false);
+    }
+  }, [report, seozoomApiKey]);
   
   const handleNewAnalysis = () => {
     setSite(null);
@@ -395,6 +465,10 @@ export default function DashboardClient() {
                         deepAnalysisReport={deepAnalysisReport}
                         filters={filters}
                         onFiltersChange={setFilters}
+                        onGenerateTopicalAuthority={handleGenerateTopicalAuthority}
+                        isTopicalAuthorityLoading={isTopicalAuthorityLoading}
+                        topicalAuthorityError={topicalAuthorityError}
+                        topicalAuthorityLoadingMessage={topicalAuthorityLoadingMessage}
                     />
                 );
             }

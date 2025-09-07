@@ -34,6 +34,10 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
+  onGenerateTopicalAuthority: () => void;
+  isTopicalAuthorityLoading: boolean;
+  topicalAuthorityError: string | null;
+  topicalAuthorityLoadingMessage: string;
 }
 
 export const ReportDisplay = (props: ReportDisplayProps) => {
@@ -50,7 +54,11 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       onDeepAnalysis,
       isDeepLoading,
       deepError,
-      deepAnalysisReport
+      deepAnalysisReport,
+      onGenerateTopicalAuthority,
+      isTopicalAuthorityLoading,
+      topicalAuthorityError,
+      topicalAuthorityLoadingMessage
   } = props;
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   
@@ -171,7 +179,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
             <TabsList>
                 <TabsTrigger value="summary" icon={<LayoutDashboardIcon className="w-5 h-5" />}>Riepilogo Strategico</TabsTrigger>
                 <TabsTrigger value="suggestions" icon={<LinkIcon className="w-5 h-5" />}>Suggerimenti di Link</TabsTrigger>
-                {report.topical_authority_roadmap && <TabsTrigger value="topical_authority" icon={<MapIcon className="w-5 h-5" />}>Topical Authority</TabsTrigger>}
+                <TabsTrigger value="topical_authority" icon={<MapIcon className="w-5 h-5" />}>Topical Authority</TabsTrigger>
                 <TabsTrigger value="content" icon={<LightBulbIcon className="w-5 h-5" />}>Analisi Contenuti</TabsTrigger>
                 <TabsTrigger value="deep-dive" icon={<BeakerIcon className="w-5 h-5" />}>Analisi Approfondita</TabsTrigger>
             </TabsList>
@@ -188,11 +196,41 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
                 <ReportView {...props} />
             </TabsContent>
 
-            {report.topical_authority_roadmap && (
-              <TabsContent value="topical_authority">
-                <TopicalAuthorityRoadmap roadmap={report.topical_authority_roadmap} />
-              </TabsContent>
-            )}
+            <TabsContent value="topical_authority">
+                {report.topical_authority_roadmap ? (
+                    <TopicalAuthorityRoadmap roadmap={report.topical_authority_roadmap} />
+                ) : (
+                    <div className="text-center py-12 px-6 bg-slate-50 rounded-2xl border border-slate-200">
+                        <MapIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
+                        <h3 className="text-xl font-bold text-slate-800">Sblocca la tua Topical Authority Roadmap</h3>
+                        <p className="max-w-xl mx-auto text-slate-600 mt-2 mb-6">
+                            Avvia un'analisi strategica approfondita per scoprire i cluster di contenuti mancanti, ricevere suggerimenti per nuovi articoli e ottenere un piano d'azione per diventare un'autorità nel tuo settore.
+                        </p>
+                        {!isTopicalAuthorityLoading ? (
+                            <button 
+                                onClick={onGenerateTopicalAuthority}
+                                className="bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+                            >
+                                <BrainCircuitIcon className="w-5 h-5" />
+                                Genera Roadmap Strategica
+                            </button>
+                        ) : (
+                            <div className="flex flex-col items-center">
+                                <LoadingSpinnerIcon className="w-8 h-8 text-blue-600 mb-3" />
+                                <p className="text-slate-500 font-semibold animate-fade-in-up" key={topicalAuthorityLoadingMessage}>
+                                    {topicalAuthorityLoadingMessage}
+                                </p>
+                            </div>
+                        )}
+                        {topicalAuthorityError && (
+                            <div className="mt-4 flex items-center justify-center gap-2 text-red-600">
+                                <XCircleIcon className="w-5 h-5" />
+                                <p className="text-sm">{topicalAuthorityError}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </TabsContent>
 
             <TabsContent value="content">
                  {report.thematic_clusters && report.thematic_clusters.length > 0 ? (

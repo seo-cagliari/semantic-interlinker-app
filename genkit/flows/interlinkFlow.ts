@@ -536,25 +536,66 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
       options.sendEvent({ type: 'progress', message: `Agente 3 (Content Strategist) fallito. Procedo senza content gap. Errore: ${detailedError}` });
   }
 
-  // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST ---
-  options.sendEvent({ type: 'progress', message: "Agente 4: Lo Stratega di Topical Authority sta costruendo la tua roadmap..." });
-  let topicalAuthorityRoadmap: TopicalAuthorityRoadmap | undefined = undefined;
-  try {
+  options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
+
+  const finalReport: Report = {
+    site: options.site_root,
+    gscSiteUrl: options.gscSiteUrl,
+    generated_at: new Date().toISOString(),
+    thematic_clusters: thematicClusters,
+    suggestions: reportSuggestions,
+    content_gap_suggestions: contentGapSuggestions,
+    page_diagnostics: pageDiagnostics,
+    opportunity_hub: opportunityHubData,
+    internal_links_map: internalLinksMap,
+    gscData: options.gscData,
+    ga4Data: options.ga4Data,
+    summary: {
+        pages_scanned: allSiteUrls.length,
+        indexable_pages: allSiteUrls.length,
+        suggestions_total: reportSuggestions.length,
+        high_priority: reportSuggestions.filter((s: any) => s.score >= 0.75).length,
+    }
+  };
+  
+  options.sendEvent({ type: 'done', payload: finalReport });
+}
+
+export async function topicalAuthorityFlow(options: {
+  site_root: string;
+  thematic_clusters: ThematicCluster[];
+  page_diagnostics: PageDiagnostic[];
+  opportunity_hub_data: OpportunityPage[];
+  seozoomApiKey?: string;
+  sendEvent: (event: object) => void;
+}): Promise<TopicalAuthorityRoadmap> {
+    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, seozoomApiKey, sendEvent } = options;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+    const onRetryCallback = (attempt: number, delay: number) => {
+        sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
+    };
+
+    // --- AGENT 4: TOPICAL AUTHORITY STRATEGIST ---
+    sendEvent({ type: 'progress', message: "Agente 4: Lo Stratega di Topical Authority sta costruendo la tua roadmap..." });
+    let topicalAuthorityRoadmap: TopicalAuthorityRoadmap | undefined = undefined;
+
     const topicalAuthorityPrompt = `
       Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority e SEO semantica, seguendo i principi di Koray Tuğberk Gürbüz.
       
       CONTESTO:
-      Stai analizzando il sito "${options.site_root}". La tua analisi ha già prodotto i seguenti cluster tematici, che rappresentano la conoscenza attuale del sito:
-      ${JSON.stringify(thematicClusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+      Stai analizzando il sito "${site_root}". La tua analisi ha già prodotto i seguenti cluster tematici, che rappresentano la conoscenza attuale del sito:
+      ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
       
       IL TUO COMPITO:
-      Creare una "Topical Authority Roadmap" strategica per trasformare questo sito nella risorsa definitiva sul suo argomento principale.
+      Creare una "Topical Authority Roadmap" strategica e approfondita.
+      Il tuo compito è duplice: se il sito è nuovo o ha pochi contenuti, delinea una **mappa tematica fondamentale completa** partendo da zero. Se il sito è maturo, identifica le **lacune strategiche più profonde** e i cluster adiacenti per espandere l'autorità.
       
       ISTRUZIONI:
       1. SINTETIZZA L'ARGOMENTO PRINCIPALE: Basandoti sui cluster esistenti, identifica e dichiara il 'main_topic' del sito in una frase chiara.
       2. VALUTA LA COPERTURA ATTUALE: Estrapola le entità e i concetti coperti dai cluster. Assegna un 'coverage_score' da 0 a 100 che rappresenti la completezza tematica attuale. Un punteggio alto (90+) significa che il sito copre quasi tutto. Un punteggio basso (<50) indica molte lacune.
       3. IDENTIFICA I CLUSTER MANCANTI: Confronta la conoscenza attuale del sito con una mappa semantica ideale per il 'main_topic'. Identifica 2-4 cluster concettuali di alto livello che sono completamente assenti o trattati in modo superficiale.
-      4. GENERA SUGGERIMENTI DI CONTENUTO: Per ogni cluster mancante, fornisci una 'strategic_rationale' (perché è importante) e suggerisci 2-3 titoli di articoli ('article_suggestions') specifici e pratici che potrebbero popolarlo, includendo le 'target_queries' per ogni articolo.
+      4. GENERA SUGGERIMENTI DI CONTENUTO: Per ogni cluster mancante, fornisci una 'strategic_rationale' che spieghi perché quel cluster è **essenziale per la completezza semantica** e come si collega agli obiettivi di business. Suggerisci 2-3 titoli di articoli ('article_suggestions') **estremamente specifici e orientati all'azione**, non generici. Includi le 'target_queries' per ogni articolo.
       
       OUTPUT:
       La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
@@ -591,149 +632,130 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
       required: ["main_topic", "coverage_score", "cluster_suggestions"]
     };
 
-    const topicalResponse = await generateContentWithRetry(ai, {
-      model: "gemini-2.5-flash",
-      contents: topicalAuthorityPrompt,
-      config: { responseMimeType: "application/json", responseSchema: topicalAuthoritySchema, seed: 42 },
-    }, 4, 1000, onRetryCallback);
+    try {
+        const topicalResponse = await generateContentWithRetry(ai, {
+        model: "gemini-2.5-flash",
+        contents: topicalAuthorityPrompt,
+        config: { responseMimeType: "application/json", responseSchema: topicalAuthoritySchema, seed: 42 },
+        }, 4, 1000, onRetryCallback);
 
-    const responseText = topicalResponse.text;
-    if (responseText) {
-      topicalAuthorityRoadmap = JSON.parse(responseText.trim());
-      options.sendEvent({ type: 'progress', message: `Agente 4 completo. Creata la roadmap per la Topical Authority.` });
+        const responseText = topicalResponse.text;
+        if (responseText) {
+            topicalAuthorityRoadmap = JSON.parse(responseText.trim());
+        } else {
+            throw new Error("Received empty response from Topical Authority agent.");
+        }
+    } catch (e) {
+        console.error("Error during Topical Authority Analysis phase:", e);
+        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+        throw new Error(`Agent 4 (Topical Authority Strategist) failed. Error: ${detailedError}`);
     }
-  } catch (e) {
-    console.error("Error during Topical Authority Analysis phase:", e);
-    const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-    options.sendEvent({ type: 'progress', message: `Agente 4 (Topical Authority Strategist) fallito. Procedo senza roadmap. Errore: ${detailedError}` });
-  }
 
-  // --- AGENT 4.5: PRIORITIZATION ENGINE & CONTENT ARCHITECT ---
-  if (topicalAuthorityRoadmap) {
-      options.sendEvent({ type: 'progress', message: "Agente 4.5: Prioritizzazione della roadmap e creazione dei content brief..." });
-      
-      const contentBriefSchema = {
-        type: Type.OBJECT,
-        properties: {
-          structure_suggestions: {
-            type: Type.ARRAY,
-            items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, title: { type: Type.STRING } } }
-          },
-          semantic_entities: { type: Type.ARRAY, items: { type: Type.STRING } },
-          key_questions_to_answer: { type: Type.ARRAY, items: { type: Type.STRING } },
-          internal_link_suggestions: {
-            type: Type.ARRAY,
-            items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, anchor_text: { type: Type.STRING }, rationale: { type: Type.STRING } } }
-          }
-        },
-        required: ["structure_suggestions", "semantic_entities", "key_questions_to_answer", "internal_link_suggestions"]
-      };
 
-      for (let i = 0; i < topicalAuthorityRoadmap.cluster_suggestions.length; i++) {
-          const cluster = topicalAuthorityRoadmap.cluster_suggestions[i];
-          options.sendEvent({ type: 'progress', message: `Analisi impatto per cluster: "${cluster.cluster_name}"...` });
-
-          // Prioritization Engine
-          let totalVolume = 0;
-          let totalDifficulty = 0;
-          let queryCount = 0;
-          let opportunityConnection = false;
-          
-          if (options.seozoomApiKey) {
-            for (const article of cluster.article_suggestions) {
-              for (const query of article.target_queries) {
-                try {
-                  const seoData = await seozoom.getKeywordData(query, options.seozoomApiKey);
-                  totalVolume += seoData.search_volume;
-                  totalDifficulty += seoData.keyword_difficulty;
-                  queryCount++;
-                  if (opportunityHubData.some(p => p.url.includes(query.split(' ')[0]))) opportunityConnection = true;
-                } catch (e) { console.warn(`Could not fetch SEOZoom data for: ${query}`); }
-              }
+    // --- AGENT 4.5: PRIORITIZATION ENGINE & CONTENT ARCHITECT ---
+    if (topicalAuthorityRoadmap) {
+        sendEvent({ type: 'progress', message: "Agente 4.5: Prioritizzazione della roadmap e creazione dei content brief..." });
+        
+        const contentBriefSchema = {
+            type: Type.OBJECT,
+            properties: {
+            structure_suggestions: {
+                type: Type.ARRAY,
+                items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, title: { type: Type.STRING } } }
+            },
+            semantic_entities: { type: Type.ARRAY, items: { type: Type.STRING } },
+            key_questions_to_answer: { type: Type.ARRAY, items: { type: Type.STRING } },
+            internal_link_suggestions: {
+                type: Type.ARRAY,
+                items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, anchor_text: { type: Type.STRING }, rationale: { type: Type.STRING } } }
             }
-          }
-          
-          const avgDifficulty = queryCount > 0 ? totalDifficulty / queryCount : 100;
-          let score = 5.0;
-          score += (Math.log10(totalVolume + 1) * 0.5); // Boost for volume
-          score -= (avgDifficulty / 20); // Penalty for high difficulty
-          if (opportunityConnection) score += 1.5; // Boost if it connects to existing opportunities
-          cluster.impact_score = Math.max(1, Math.min(10, parseFloat(score.toFixed(1))));
-          cluster.impact_rationale = `Basato su un volume di ricerca stimato di ${totalVolume.toLocaleString()}, una difficoltà media di ${avgDifficulty.toFixed(0)}/100, e ${opportunityConnection ? 'una forte connessione con' : 'nessuna connessione diretta con'} le opportunità di crescita esistenti.`;
+            },
+            required: ["structure_suggestions", "semantic_entities", "key_questions_to_answer", "internal_link_suggestions"]
+        };
 
-          // Content Architect
-          for (let j = 0; j < cluster.article_suggestions.length; j++) {
-              const article = cluster.article_suggestions[j];
-              options.sendEvent({ type: 'progress', message: `Creazione brief per: "${article.title.substring(0,30)}..."` });
+        for (let i = 0; i < topicalAuthorityRoadmap.cluster_suggestions.length; i++) {
+            const cluster = topicalAuthorityRoadmap.cluster_suggestions[i];
+            sendEvent({ type: 'progress', message: `Analisi impatto per cluster: "${cluster.cluster_name}"...` });
 
-              const contentArchitectPrompt = `
-                Agisci come un SEO Content Strategist e Architetto dell'Informazione di livello mondiale.
-                Il tuo compito è creare un brief di contenuto dettagliato e strategico per un nuovo articolo.
+            // Prioritization Engine
+            let totalVolume = 0;
+            let totalDifficulty = 0;
+            let queryCount = 0;
+            let opportunityConnection = false;
+            
+            if (seozoomApiKey) {
+                for (const article of cluster.article_suggestions) {
+                for (const query of article.target_queries) {
+                    try {
+                    const seoData = await seozoom.getKeywordData(query, seozoomApiKey);
+                    totalVolume += seoData.search_volume;
+                    totalDifficulty += seoData.keyword_difficulty;
+                    queryCount++;
+                    if (opportunity_hub_data.some(p => p.url.includes(query.split(' ')[0]))) opportunityConnection = true;
+                    } catch (e) { console.warn(`Could not fetch SEOZoom data for: ${query}`); }
+                }
+                }
+            }
+            
+            const avgDifficulty = queryCount > 0 ? totalDifficulty / queryCount : 100;
+            let score = 5.0;
+            score += (Math.log10(totalVolume + 1) * 0.5); // Boost for volume
+            score -= (avgDifficulty / 20); // Penalty for high difficulty
+            if (opportunityConnection) score += 1.5; // Boost if it connects to existing opportunities
+            cluster.impact_score = Math.max(1, Math.min(10, parseFloat(score.toFixed(1))));
+            cluster.impact_rationale = `Basato su un volume di ricerca stimato di ${totalVolume.toLocaleString()}, una difficoltà media di ${avgDifficulty.toFixed(0)}/100, e ${opportunityConnection ? 'una forte connessione con' : 'nessuna connessione diretta con'} le opportunità di crescita esistenti.`;
+
+            // Content Architect
+            for (let j = 0; j < cluster.article_suggestions.length; j++) {
+                const article = cluster.article_suggestions[j];
+                sendEvent({ type: 'progress', message: `Creazione brief per: "${article.title.substring(0,30)}..."` });
+
+                const contentArchitectPrompt = `
+                    Agisci come un SEO Content Strategist e Architetto dell'Informazione di livello mondiale.
+                    Il tuo compito è creare un brief di contenuto dettagliato e strategico per un nuovo articolo.
+                    
+                    CONTESTO SUL SITO ("${site_root}"):
+                    - Argomento Principale: ${topicalAuthorityRoadmap.main_topic}
+                    - Cluster Esistenti: ${thematic_clusters.map(c => c.cluster_name).join(', ')}
+                    - Pagine Rilevanti (URL con punteggio di autorità): ${page_diagnostics.slice(0, 20).map(p => `[${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+
+                    ARTICOLO DA PIANIFICARE:
+                    - Titolo: "${article.title}"
+                    - Query Target Principali: ${article.target_queries.join(', ')}
+
+                    IL TUO COMPITO:
+                    Genera un brief di contenuto in formato JSON. Sii strategico e pratico.
+                    
+                    ISTRUZIONI DETTAGLIATE:
+                    1.  \`structure_suggestions\`: Proponi una struttura logica per l'articolo usando una gerarchia di H2 e H3.
+                    2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi per garantire una copertura completa.
+                    3.  \`key_questions_to_answer\`: Identifica le domande principali che gli utenti si pongono su questo argomento. L'articolo deve rispondere a queste domande.
+                    4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito (usa l'elenco fornito) per rafforzare i cluster tematici.
+
+                    OUTPUT: La tua risposta DEVE essere un oggetto JSON valido in italiano.
+                `;
                 
-                CONTESTO SUL SITO ("${options.site_root}"):
-                - Argomento Principale: ${topicalAuthorityRoadmap.main_topic}
-                - Cluster Esistenti: ${thematicClusters.map(c => c.cluster_name).join(', ')}
-                - Pagine Rilevanti (URL con punteggio di autorità): ${pageDiagnostics.slice(0, 20).map(p => `[${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
+                try {
+                    const briefResponse = await generateContentWithRetry(ai, {
+                        model: "gemini-2.5-flash",
+                        contents: contentArchitectPrompt,
+                        config: { responseMimeType: "application/json", responseSchema: contentBriefSchema, seed: 42 },
+                    }, 4, 1000, onRetryCallback);
 
-                ARTICOLO DA PIANIFICARE:
-                - Titolo: "${article.title}"
-                - Query Target Principali: ${article.target_queries.join(', ')}
-
-                IL TUO COMPITO:
-                Genera un brief di contenuto in formato JSON. Sii strategico e pratico.
-                
-                ISTRUZIONI DETTAGLIATE:
-                1.  \`structure_suggestions\`: Proponi una struttura logica per l'articolo usando una gerarchia di H2 e H3.
-                2.  \`semantic_entities\`: Elenca i concetti, le entità e i termini correlati (LSI) che devono essere inclusi per garantire una copertura completa.
-                3.  \`key_questions_to_answer\`: Identifica le domande principali che gli utenti si pongono su questo argomento. L'articolo deve rispondere a queste domande.
-                4.  \`internal_link_suggestions\`: Suggerisci 2-3 link interni strategici DA questo nuovo articolo VERSO pagine ESISTENTI E RILEVANTI del sito (usa l'elenco fornito) per rafforzare i cluster tematici.
-
-                OUTPUT: La tua risposta DEVE essere un oggetto JSON valido in italiano.
-              `;
-              
-              try {
-                  const briefResponse = await generateContentWithRetry(ai, {
-                      model: "gemini-2.5-flash",
-                      contents: contentArchitectPrompt,
-                      config: { responseMimeType: "application/json", responseSchema: contentBriefSchema, seed: 42 },
-                  }, 4, 1000, onRetryCallback);
-
-                  if (briefResponse.text) {
-                      article.content_brief = JSON.parse(briefResponse.text.trim()) as ContentBrief;
-                  }
-              } catch (e) {
-                  console.error(`Content Architect failed for "${article.title}"`, e);
-              }
-          }
-      }
-      options.sendEvent({ type: 'progress', message: `Agente 4.5 completo. Roadmap arricchita con punteggi e brief.` });
-  }
-
-  options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
-
-  const finalReport: Report = {
-    site: options.site_root,
-    gscSiteUrl: options.gscSiteUrl,
-    generated_at: new Date().toISOString(),
-    thematic_clusters: thematicClusters,
-    suggestions: reportSuggestions,
-    content_gap_suggestions: contentGapSuggestions,
-    page_diagnostics: pageDiagnostics,
-    opportunity_hub: opportunityHubData,
-    topical_authority_roadmap: topicalAuthorityRoadmap,
-    internal_links_map: internalLinksMap,
-    gscData: options.gscData,
-    ga4Data: options.ga4Data,
-    summary: {
-        pages_scanned: allSiteUrls.length,
-        indexable_pages: allSiteUrls.length,
-        suggestions_total: reportSuggestions.length,
-        high_priority: reportSuggestions.filter((s: any) => s.score >= 0.75).length,
+                    if (briefResponse.text) {
+                        article.content_brief = JSON.parse(briefResponse.text.trim()) as ContentBrief;
+                    }
+                } catch (e) {
+                    console.error(`Content Architect failed for "${article.title}"`, e);
+                }
+            }
+        }
+        sendEvent({ type: 'progress', message: `Agente 4.5 completo. Roadmap arricchita con punteggi e brief.` });
     }
-  };
-  
-  options.sendEvent({ type: 'done', payload: finalReport });
+
+    return topicalAuthorityRoadmap;
 }
+
 
 export async function deepAnalysisFlow(options: {
   pageUrl: string;
