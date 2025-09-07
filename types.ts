@@ -1,4 +1,5 @@
 
+
 export type RiskChecks = {
   target_status: number;
   target_indexable: boolean;
@@ -79,6 +80,7 @@ export type TopicalArticleSuggestion = {
   title: string;
   target_queries: string[];
   section_type: 'Core' | 'Outer';
+  unique_angle?: string; // Angolo strategico o "gancio" per il contenuto
   content_brief?: ContentBrief;
 };
 

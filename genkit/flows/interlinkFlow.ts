@@ -837,10 +837,11 @@ export async function topicalAuthorityFlow(options: {
       PAGINE CHE IL SITO HA GIA' SCRITTO PER QUESTO PILLAR:
       ${existingPagesForPillar.length > 0 ? existingPagesForPillar.join('\n') : "Nessuna pagina esistente trovata per questo Pillar."}
       
-      PROCESSO DI ANALISI IN 3 PASSI:
+      PROCESSO DI ANALISI IN 4 PASSI:
       1. COSTRUISCI LA MAPPA IDEALE: Mentalmente, costruisci la mappa tematica ideale e completa per l'argomento "${pillar}". Pensa a tutti i sotto-argomenti, a cascata, che un vero esperto tratterebbe, dai concetti base a quelli più avanzati.
       2. ESEGUI UN CONFRONTO CHIRURGICO: Sovrapponi la tua mappa ideale all'elenco di pagine che il sito ha già scritto.
       3. IDENTIFICA I GAP REALI: Il tuo output deve includere SOLO ed ESCLUSIVAMENTE i cluster di contenuti e gli articoli che sono MANCANTI. NON SUGGERIRE MAI contenuti già trattati, anche parzialmente, dalle pagine esistenti.
+      4. EVITA LA SOVRAPPOSIZIONE: Assicurati che i suggerimenti di articoli tra cluster e pillar diversi siano unici. Se due idee di contenuto sono molto simili, proponi un singolo articolo più completo nel cluster più pertinente.
       
       ISTRUZIONI PER L'OUTPUT:
       - 'strategic_summary': Un paragrafo che riassume lo stato attuale del Pillar e la strategia per colmare i gap, allineandola al Contesto di Business.
@@ -853,6 +854,7 @@ export async function topicalAuthorityFlow(options: {
               - 'title': Un titolo SEO-friendly.
               - 'target_queries': 3-5 query di ricerca pertinenti.
               - 'section_type': Classificalo come 'Core' (transazionale, vicino alla vendita) o 'Outer' (informativo, costruisce fiducia).
+              - 'unique_angle': Fornisci una frase che descriva un 'angolo' unico o un valore aggiunto per l'articolo (es. 'Include un template scaricabile', 'Analizza 3 casi studio locali').
     `;
 
     const gapAnalysisSchema = {
@@ -875,9 +877,10 @@ export async function topicalAuthorityFlow(options: {
                   properties: {
                     title: { type: Type.STRING },
                     target_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    section_type: { type: Type.STRING }
+                    section_type: { type: Type.STRING },
+                    unique_angle: { type: Type.STRING }
                   },
-                  required: ["title", "target_queries", "section_type"]
+                  required: ["title", "target_queries", "section_type", "unique_angle"]
                 }
               }
             },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PillarRoadmap, ContentBrief, StrategicContext, BridgeArticleSuggestion, TopicalClusterSuggestion } from '../types';
-import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon, LinkIcon } from './Icons';
+import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon, LinkIcon, SparklesIcon } from './Icons';
 import { ContentBriefModal } from './ContentBriefModal';
 
 interface TopicalAuthorityGeneratorProps {
@@ -221,8 +221,8 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
                         <h6 className="text-xs font-semibold text-slate-500 uppercase mb-3">Suggerimenti di Articoli</h6>
                         <div className="space-y-3">
                             {(cluster.article_suggestions || []).map((article, articleIndex) => (
-                                <div key={articleIndex}>
-                                  <div className="w-full text-left p-2 rounded-md">
+                                <div key={articleIndex} className="bg-white p-3 rounded-lg border border-slate-200/80">
+                                  <div className="w-full text-left rounded-md">
                                      <div className="flex items-start justify-between">
                                           <div className="flex items-start gap-2">
                                               <NewspaperIcon className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
@@ -230,9 +230,17 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
                                           </div>
                                           <SectionBadge type={article.section_type} />
                                      </div>
-                                     <p className="text-xs text-slate-500 mt-1 pl-6">
-                                       <span className="font-medium">Query:</span> {article.target_queries.map(q => `"${q}"`).join(', ')}
-                                     </p>
+                                     <div className="pl-6">
+                                        {article.unique_angle && (
+                                            <div className="flex items-start gap-1.5 mt-2 text-xs text-amber-800">
+                                                <SparklesIcon className="w-3.5 h-3.5 shrink-0 mt-px text-amber-500"/>
+                                                <p className="italic"><strong className='font-semibold'>Angolo Unico:</strong> {article.unique_angle}</p>
+                                            </div>
+                                        )}
+                                         <p className="text-xs text-slate-500 mt-2">
+                                           <span className="font-medium">Query:</span> {article.target_queries.map(q => `"${q}"`).join(', ')}
+                                         </p>
+                                     </div>
                                   </div>
                                 </div>
                             ))}
