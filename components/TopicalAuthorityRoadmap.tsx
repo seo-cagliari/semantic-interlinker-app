@@ -6,7 +6,7 @@ import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon,
 import { ContentBriefModal } from './ContentBriefModal';
 
 interface TopicalAuthorityGeneratorProps {
-    onGenerate: (mainTopic: string, serpApiKey: string) => void;
+    onGenerate: (serpApiKey: string) => void;
     isLoading: boolean;
     error: string | null;
     loadingMessage: string;
@@ -15,21 +15,16 @@ interface TopicalAuthorityGeneratorProps {
 
 export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps) => {
     const { onGenerate, isLoading, error, loadingMessage, initialApiKey } = props;
-    const [mainTopic, setMainTopic] = useState('');
     const [serpApiKey, setSerpApiKey] = useState(initialApiKey);
     const [formError, setFormError] = useState<string | null>(null);
 
     const handleSubmit = () => {
         setFormError(null);
-        if (!mainTopic.trim()) {
-            setFormError("L'argomento principale è obbligatorio.");
-            return;
-        }
         if (!serpApiKey.trim()) {
             setFormError("La chiave API per l'analisi SERP è obbligatoria.");
             return;
         }
-        onGenerate(mainTopic, serpApiKey);
+        onGenerate(serpApiKey);
     };
 
     if (isLoading) {
@@ -65,20 +60,9 @@ export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps)
             <MapIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
             <h3 className="text-xl font-bold text-slate-800">Sblocca la tua Topical Authority Roadmap</h3>
             <p className="max-w-2xl mx-auto text-slate-600 mt-2 mb-6">
-                Avvia un'analisi strategica basata sui dati della SERP. Fornisci l'argomento principale che vuoi dominare e una chiave API di <a href="https://serpapi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-semibold hover:underline">SerpApi</a> per analizzare i tuoi competitor in tempo reale.
+                Avvia un'analisi strategica basata sui dati della SERP. L'AI identificherà autonomamente l'argomento principale del tuo sito. Fornisci una chiave API di <a href="https://serpapi.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-semibold hover:underline">SerpApi</a> per analizzare i tuoi competitor in tempo reale.
             </p>
             <div className="max-w-lg mx-auto space-y-4 text-left">
-                <div>
-                    <label htmlFor="mainTopic" className="block text-sm font-medium text-slate-700 mb-1">Argomento Principale</label>
-                    <input 
-                        type="text" 
-                        id="mainTopic"
-                        value={mainTopic}
-                        onChange={(e) => setMainTopic(e.target.value)}
-                        placeholder="Es. assicurazione auto elettriche"
-                        className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                    />
-                </div>
                  <div>
                     <label htmlFor="serpApiKey" className="block text-sm font-medium text-slate-700 mb-1">Chiave API SerpApi</label>
                     <input 
@@ -97,7 +81,7 @@ export const TopicalAuthorityGenerator = (props: TopicalAuthorityGeneratorProps)
                 className="mt-6 bg-slate-900 text-white font-bold py-3 px-6 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 mx-auto"
             >
                 <BrainCircuitIcon className="w-5 h-5" />
-                Genera Roadmap con Analisi SERP
+                Genera Audit Completo della Topical Authority
             </button>
         </div>
     );

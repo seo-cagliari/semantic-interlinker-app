@@ -323,14 +323,13 @@ export default function DashboardClient() {
     }
   }, [savedReport]);
 
-  const handleGenerateTopicalAuthority = useCallback(async (mainTopic: string, currentSerpApiKey: string) => {
+  const handleGenerateTopicalAuthority = useCallback(async (currentSerpApiKey: string) => {
     if (!report) return;
 
     setIsTopicalAuthorityLoading(true);
     setTopicalAuthorityError(null);
     setTopicalAuthorityLoadingMessage("Avvio dello stratega di Topical Authority...");
     
-    // Also persist the key if it's different
     if (currentSerpApiKey !== serpApiKey) {
         setSerpApiKey(currentSerpApiKey);
     }
@@ -344,7 +343,6 @@ export default function DashboardClient() {
                 thematic_clusters: report.thematic_clusters,
                 page_diagnostics: report.page_diagnostics,
                 opportunity_hub_data: report.opportunity_hub || [],
-                mainTopic: mainTopic,
                 serpApiKey: currentSerpApiKey,
                 seozoomApiKey: seozoomApiKey,
             })

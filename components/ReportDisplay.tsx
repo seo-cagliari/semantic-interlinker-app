@@ -33,7 +33,7 @@ interface ReportDisplayProps {
   deepAnalysisReport: DeepAnalysisReport | null;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
-  onGenerateTopicalAuthority: (mainTopic: string, serpApiKey: string) => void;
+  onGenerateTopicalAuthority: (serpApiKey: string) => void;
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;

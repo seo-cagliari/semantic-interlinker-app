@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
           thematic_clusters, 
           page_diagnostics, 
           opportunity_hub_data, 
-          mainTopic,
           serpApiKey,
           seozoomApiKey 
         } = body as {
@@ -35,13 +34,12 @@ export async function POST(req: NextRequest) {
           thematic_clusters: ThematicCluster[];
           page_diagnostics: PageDiagnostic[];
           opportunity_hub_data: OpportunityPage[];
-          mainTopic: string;
           serpApiKey: string;
           seozoomApiKey?: string;
         };
 
-        if (!site_root || !thematic_clusters || !page_diagnostics || !mainTopic || !serpApiKey) {
-          throw new Error('site_root, thematic_clusters, page_diagnostics, mainTopic, and serpApiKey are required.');
+        if (!site_root || !thematic_clusters || !page_diagnostics || !serpApiKey) {
+          throw new Error('site_root, thematic_clusters, page_diagnostics, and serpApiKey are required.');
         }
 
         const roadmap: TopicalAuthorityRoadmap = await topicalAuthorityFlow({
@@ -49,7 +47,6 @@ export async function POST(req: NextRequest) {
           thematic_clusters,
           page_diagnostics,
           opportunity_hub_data,
-          mainTopic,
           serpApiKey,
           seozoomApiKey,
           sendEvent,

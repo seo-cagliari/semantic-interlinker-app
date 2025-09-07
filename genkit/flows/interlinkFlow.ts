@@ -609,20 +609,59 @@ export async function topicalAuthorityFlow(options: {
   thematic_clusters: ThematicCluster[];
   page_diagnostics: PageDiagnostic[];
   opportunity_hub_data: OpportunityPage[];
-  mainTopic: string;
   serpApiKey: string;
   seozoomApiKey?: string;
   sendEvent: (event: object) => void;
 }): Promise<TopicalAuthorityRoadmap> {
-    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, mainTopic, serpApiKey, seozoomApiKey, sendEvent } = options;
+    const { site_root, thematic_clusters, page_diagnostics, opportunity_hub_data, serpApiKey, seozoomApiKey, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const onRetryCallback = (attempt: number, delay: number) => {
         sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
     };
+    
+    // --- NEW AGENT: THEMATIC DISCOVERY AGENT ---
+    sendEvent({ type: 'progress', message: "Agente di Scoperta: Sto identificando l'argomento principale del sito..." });
+    let mainTopic = '';
+    try {
+        const topicDiscoveryPrompt = `
+          Agisci come un esperto architetto dell'informazione. Analizza i seguenti cluster tematici di un sito web e sintetizza l'argomento principale ("seed topic") di livello più alto che li comprende tutti.
+          
+          CLUSTER TEMATICI:
+          ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
+          
+          ISTRUZIONI:
+          - Sii conciso e strategico.
+          - La tua risposta DEVE essere un oggetto JSON con una sola chiave: "main_topic".
+          - Esempio: Se i cluster sono "SEO On-Page", "Link Building", "SEO Tecnica", il main_topic potrebbe essere "Consulenza SEO Avanzata".
+        `;
+        const topicDiscoverySchema = {
+            type: Type.OBJECT,
+            properties: {
+                main_topic: { type: Type.STRING }
+            },
+            required: ["main_topic"]
+        };
+
+        const topicResponse = await generateContentWithRetry(ai, {
+            model: "gemini-2.5-flash",
+            contents: topicDiscoveryPrompt,
+            config: { responseMimeType: "application/json", responseSchema: topicDiscoverySchema, seed: 42 },
+        }, 4, 1000, onRetryCallback);
+
+        const responseText = topicResponse.text;
+        if (!responseText) throw new Error("Received empty response from Topic Discovery agent.");
+        mainTopic = JSON.parse(responseText.trim()).main_topic;
+        sendEvent({ type: 'progress', message: `Argomento principale identificato: "${mainTopic}"` });
+
+    } catch(e) {
+        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+        throw new Error(`Topic Discovery Agent failed. Error: ${detailedError}`);
+    }
+
 
     // --- AGENT 5: SERP ANALYST ---
-    sendEvent({ type: 'progress', message: "Agente 5: L'Analista SERP sta esaminando i competitor..." });
+    sendEvent({ type: 'progress', message: `Agente 5: L'Analista SERP sta esaminando i competitor per "${mainTopic}"...` });
     let serpAnalysisResult: SerpAnalysisResult;
     try {
         serpAnalysisResult = await serpAnalyzer.getSerpAnalysis(mainTopic, serpApiKey, (progressMessage) => {
