@@ -10,6 +10,7 @@ import { ThematicClusters } from './ThematicClusters';
 import { ContentGapAnalysis } from './ContentGapAnalysis';
 import { DeepAnalysisReportDisplay } from './DeepAnalysisReportDisplay';
 import { TopicalAuthorityRoadmap, TopicalAuthorityGenerator } from './TopicalAuthorityRoadmap';
+import { TopicalMapVisualizer } from './TopicalMapVisualizer';
 
 type ViewMode = 'report' | 'visualizer';
 
@@ -187,6 +188,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
                 <TabsTrigger value="summary" icon={<LayoutDashboardIcon className="w-5 h-5" />}>Riepilogo Strategico</TabsTrigger>
                 <TabsTrigger value="suggestions" icon={<LinkIcon className="w-5 h-5" />}>Suggerimenti di Link</TabsTrigger>
                 <TabsTrigger value="topical_authority" icon={<MapIcon className="w-5 h-5" />}>Topical Authority</TabsTrigger>
+                <TabsTrigger value="visual_map" icon={<RectangleGroupIcon className="w-5 h-5" />}>Mappa Visuale</TabsTrigger>
                 <TabsTrigger value="content" icon={<LightBulbIcon className="w-5 h-5" />}>Analisi Contenuti</TabsTrigger>
                 <TabsTrigger value="deep-dive" icon={<BeakerIcon className="w-5 h-5" />}>Analisi Approfondita</TabsTrigger>
             </TabsList>
@@ -218,6 +220,20 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
                         loadingMessage={topicalAuthorityLoadingMessage}
                    />
                 )}
+            </TabsContent>
+
+            <TabsContent value="visual_map">
+                 {report.pillar_roadmaps ? (
+                    <TopicalMapVisualizer roadmaps={report.pillar_roadmaps} />
+                 ) : (
+                    <div className="text-center py-12 px-6 bg-slate-50 rounded-2xl border border-slate-200">
+                        <MapIcon className="w-12 h-12 mx-auto text-slate-400 mb-3" />
+                        <h3 className="text-xl font-bold text-slate-800">Nessuna Mappa da Visualizzare</h3>
+                        <p className="max-w-xl mx-auto text-slate-600 mt-2">
+                            Genera prima la Topical Authority Roadmap per poterla visualizzare in formato grafico.
+                        </p>
+                    </div>
+                 )}
             </TabsContent>
 
             <TabsContent value="content">

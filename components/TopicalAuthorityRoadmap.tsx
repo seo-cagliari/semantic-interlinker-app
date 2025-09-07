@@ -1,10 +1,5 @@
-
-
-
-
-
 import React, { useState } from 'react';
-import { PillarRoadmap, ContentBrief, StrategicContext, BridgeArticleSuggestion } from '../types';
+import { PillarRoadmap, ContentBrief, StrategicContext, BridgeArticleSuggestion, TopicalClusterSuggestion } from '../types';
 import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon, LinkIcon } from './Icons';
 import { ContentBriefModal } from './ContentBriefModal';
 
@@ -115,6 +110,30 @@ const SectionBadge = ({ type }: { type: 'Core' | 'Outer' }) => {
     );
 };
 
+const ImpactScoreBadge = ({ score, rationale }: { score?: number, rationale?: string }) => {
+    if (score === undefined) return null;
+
+    const scoreColor = score >= 8 ? 'text-green-700' : score >= 5 ? 'text-yellow-700' : 'text-slate-600';
+
+    return (
+        <div 
+            className="relative group flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-700"
+            title={rationale || 'Punteggio di impatto strategico'}
+        >
+            <StarIcon className={`w-3 h-3 ${scoreColor}`} />
+            <span className={scoreColor}>{score.toFixed(1)}/10</span>
+            <span className="hidden md:inline">&nbsp;Impatto</span>
+            {rationale && (
+                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 rounded-md shadow-lg bg-slate-800 text-white text-xs z-10 
+                    opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 pointer-events-none">
+                    {rationale}
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-slate-800 rotate-45"></div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 interface TopicalAuthorityRoadmapProps {
   roadmaps: PillarRoadmap[];
@@ -167,13 +186,16 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
               <h4 className="text-lg font-semibold text-slate-800 mb-4 mt-6">Cluster di Contenuti Mancanti per questo Pillar:</h4>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {(pillar.cluster_suggestions || []).map((cluster, index) => (
+                {[...(pillar.cluster_suggestions || [])]
+                    .sort((a, b) => (b.impact_score || 0) - (a.impact_score || 0))
+                    .map((cluster: TopicalClusterSuggestion, index: number) => (
                   <div 
                     key={index} 
                     className="bg-slate-50/70 p-5 rounded-xl border border-slate-200 flex flex-col" 
                   >
-                    <div className="flex justify-between items-start mb-2">
-                        <h5 className="text-lg font-bold text-slate-900 flex-grow pr-4">{cluster.cluster_name}</h5>
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                        <h5 className="text-lg font-bold text-slate-900 flex-grow">{cluster.cluster_name}</h5>
+                        <ImpactScoreBadge score={cluster.impact_score} rationale={cluster.impact_rationale} />
                     </div>
                     
                     <p className="text-sm text-slate-600 mb-4">{cluster.strategic_rationale}</p>
