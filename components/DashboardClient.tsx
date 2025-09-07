@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion, StrategicContext, BridgeArticleSuggestion } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion, StrategicContext, BridgeArticleSuggestion, PageDiagnostic } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -330,6 +330,7 @@ export default function DashboardClient() {
             body: JSON.stringify({
                 site_root: report.site,
                 thematic_clusters: report.thematic_clusters,
+                page_diagnostics: report.page_diagnostics,
                 strategicContext: strategicContext,
             })
         });

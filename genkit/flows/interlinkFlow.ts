@@ -619,19 +619,74 @@ export async function contentStrategyFlow(options: {
 export async function topicalAuthorityFlow(options: {
   site_root: string;
   thematic_clusters: ThematicCluster[];
+  page_diagnostics: PageDiagnostic[];
   strategicContext: StrategicContext;
   sendEvent: (event: object) => void;
 }): Promise<{ pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] }> {
-    const { site_root, thematic_clusters, strategicContext, sendEvent } = options;
+    const { site_root, thematic_clusters, page_diagnostics, strategicContext, sendEvent } = options;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const onRetryCallback = (attempt: number, delay: number) => {
         sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
     };
     
-    // Efficiency Optimization: Use thematic_clusters directly as strategic pillars
-    const strategicPillars = thematic_clusters;
-    sendEvent({ type: 'progress', message: `Analisi basata su ${strategicPillars.length} Pillar tematici identificati: ${strategicPillars.map(p => p.cluster_name).join(', ')}` });
+    // --- AGENT 4.1: PILLAR DISCOVERY AGENT ---
+    sendEvent({ type: 'progress', message: "Agente di Scoperta: Sto analizzando il quadro generale del business..." });
+    let strategicPillarNames: string[] = [];
+    try {
+        const pillarDiscoveryPrompt = `
+            Agisci come un consulente di business e stratega SEO di livello mondiale per il sito "${site_root}".
+            
+            IL TUO COMPITO:
+            Identificare i 2-4 "Pillar" di business principali del sito. Un Pillar è una macro-categoria di servizi o argomenti fondamentale per il modello di business.
+
+            DATI DISPONIBILI PER LA TUA ANALISI STRATEGICA:
+            1.  **Direttiva Primaria (Obiettivo di Business):**
+                -   Source Context: "${strategicContext.source_context}"
+                -   Central Intent: "${strategicContext.central_intent}"
+
+            2.  **Contesto Attuale (Contenuti Esistenti):**
+                -   Cluster Tematici Già Identificati: ${thematic_clusters.map(c => `"${c.cluster_name}"`).join(', ')}
+                -   Elenco Completo dei Titoli di Pagina: ${page_diagnostics.map(p => `"${p.title}"`).join(', ')}
+
+            ISTRUZIONI DETTAGLIATE:
+            1.  **PARTI DAL BUSINESS, NON DAI CONTENUTI:** La tua decisione deve essere guidata principalmente dal "Source Context". Chiediti: "Quali categorie di servizi dovrebbe offrire un'azienda con questo obiettivo?".
+            2.  **USA I CONTENUTI PER VALIDARE, NON PER ESSERE LIMITATO:** Usa i cluster e i titoli di pagina per capire di cosa parla *attualmente* il sito e per raffinare i nomi dei Pillar.
+            3.  **NON ESSERE INFLUENZATO DALLA QUANTITÀ:** Anche se un argomento (es. "SEO") ha molti più contenuti di un altro (es. "Realizzazione Siti Web"), se entrambi sono strategicamente vitali per il business, devono essere identificati come Pillar separati.
+            4.  **SII COMPLETO:** Se noti che un Pillar è strategicamente necessario per il business ma è quasi assente nei contenuti, **identificalo comunque**. Il tuo compito è definire la struttura ideale, non solo riflettere quella attuale.
+            5.  **FORNISCI UN ELENCO:** Restituisci solo un elenco di nomi di Pillar.
+
+            La tua risposta DEVE essere un oggetto JSON.
+        `;
+        const pillarDiscoverySchema = {
+            type: Type.OBJECT,
+            properties: {
+                strategic_pillars: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                }
+            },
+            required: ["strategic_pillars"]
+        };
+
+        const pillarResponse = await generateContentWithRetry(ai, {
+            model: "gemini-2.5-flash",
+            contents: pillarDiscoveryPrompt,
+            config: { responseMimeType: "application/json", responseSchema: pillarDiscoverySchema, seed: 42 },
+        }, 4, 1000, onRetryCallback);
+
+        const responseText = pillarResponse.text;
+        if (!responseText) throw new Error("Received empty response during pillar discovery.");
+        strategicPillarNames = JSON.parse(responseText.trim()).strategic_pillars;
+
+        if (strategicPillarNames.length === 0) throw new Error("Pillar Discovery Agent did not identify any strategic pillars.");
+
+        sendEvent({ type: 'progress', message: `Pillar strategici identificati: ${strategicPillarNames.join(', ')}` });
+
+    } catch (e) {
+        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
+        throw new Error(`Agent 4.1 (Pillar Discovery) failed. Error: ${detailedError}`);
+    }
 
 
     // --- AGENT 4.2: TOPICAL AUTHORITY STRATEGIST (MULTI-PILLAR ANALYSIS) ---
@@ -669,16 +724,22 @@ export async function topicalAuthorityFlow(options: {
       required: ["strategic_summary", "cluster_suggestions"]
     };
 
-    for (const pillar of strategicPillars) {
-        sendEvent({ type: 'progress', message: `Analisi Gap per il Pillar: "${pillar.cluster_name}"...` });
+    for (const pillarName of strategicPillarNames) {
+        sendEvent({ type: 'progress', message: `Analisi Gap per il Pillar: "${pillarName}"...` });
         
-        const pillarPages = pillar.pages;
+        const relevantClusters = thematic_clusters.filter(c => 
+            pillarName.toLowerCase().includes(c.cluster_name.toLowerCase()) || 
+            c.cluster_name.toLowerCase().includes(pillarName.toLowerCase())
+        );
+
+        const pillarPages = Array.from(new Set(relevantClusters.flatMap(c => c.pages)));
+
 
         const gapAnalysisPrompt = `
           Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority (metodologia Koray Gübür) per il sito "${site_root}".
           
           IL TUO COMPITO:
-          Eseguire un'analisi dei gap di contenuto per il Pillar: "${pillar.cluster_name}", tenendo conto del contesto strategico del business.
+          Eseguire un'analisi dei gap di contenuto per il Pillar: "${pillarName}", tenendo conto del contesto strategico del business.
           
           CONTESTO STRATEGICO:
           - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
@@ -688,7 +749,7 @@ export async function topicalAuthorityFlow(options: {
           ${pillarPages.length > 0 ? pillarPages.join('\n') : "Nessuna pagina specifica trovata."}
 
           ISTRUZIONI DETTAGLIATE:
-          1.  **Costruisci la Mappa Ideale:** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale e completa per "${pillar.cluster_name}".
+          1.  **Costruisci la Mappa Ideale:** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale e completa per "${pillarName}". Pensa a cascata: quali sono tutti i sotto-argomenti necessari per trattare questo Pillar in modo esaustivo?
           2.  **Esegui l'Analisi dei Gap:** Confronta le pagine attuali con la mappa ideale per identificare i cluster e gli articoli mancanti.
           3.  **Formula la Strategia e Classifica:**
               -   Scrivi uno \`strategic_summary\` che riassuma lo stato attuale e l'importanza strategica di colmare i gap per questo Pillar.
@@ -720,19 +781,18 @@ export async function topicalAuthorityFlow(options: {
             if (responseText) {
                 const pillarData = JSON.parse(responseText.trim());
                 pillarRoadmaps.push({
-                    pillar_name: pillar.cluster_name,
+                    pillar_name: pillarName,
                     ...pillarData
                 });
             }
         } catch(e) {
-            console.error(`Gap Analysis failed for pillar "${pillar.cluster_name}"`, e);
+            console.error(`Gap Analysis failed for pillar "${pillarName}"`, e);
         }
     }
     
     // --- AGENT 4.3: CONTEXTUAL BRIDGE BUILDER ---
     let bridgeSuggestions: BridgeArticleSuggestion[] = [];
-    const pillarNames = strategicPillars.map(p => p.cluster_name);
-    if (pillarNames.length > 1) {
+    if (strategicPillarNames.length > 1) {
         sendEvent({ type: 'progress', message: "Architetto dei Ponti Contestuali: Sto cercando connessioni tra i Pillar..." });
         
         try {
@@ -740,7 +800,7 @@ export async function topicalAuthorityFlow(options: {
                 Agisci come un "Architetto di Ponti Contestuali" per il sito "${site_root}".
                 
                 CONTESTO STRATEGICO:
-                -   Pillar di Business Identificati: ${pillarNames.join(', ')}
+                -   Pillar di Business Identificati: ${strategicPillarNames.join(', ')}
                 -   Source Context (Obiettivo di Business): "${strategicContext.source_context}"
 
                 IL TUO COMPITO:

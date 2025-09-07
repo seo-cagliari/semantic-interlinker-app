@@ -1,8 +1,3 @@
-
-
-
-
-
 import { topicalAuthorityFlow } from '../../../genkit/flows/interlinkFlow';
 import { ThematicCluster, PageDiagnostic, OpportunityPage, PillarRoadmap, StrategicContext, BridgeArticleSuggestion } from '../../../types';
 import { NextRequest, NextResponse } from 'next/server';
@@ -28,20 +23,23 @@ export async function POST(req: NextRequest) {
         const { 
           site_root, 
           thematic_clusters,
+          page_diagnostics,
           strategicContext,
         } = body as {
           site_root: string;
           thematic_clusters: ThematicCluster[];
+          page_diagnostics: PageDiagnostic[];
           strategicContext: StrategicContext;
         };
 
-        if (!site_root || !thematic_clusters || !strategicContext) {
-          throw new Error('site_root, thematic_clusters and strategicContext are required.');
+        if (!site_root || !thematic_clusters || !strategicContext || !page_diagnostics) {
+          throw new Error('site_root, thematic_clusters, page_diagnostics, and strategicContext are required.');
         }
 
         const result: { pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] } = await topicalAuthorityFlow({
           site_root,
           thematic_clusters,
+          page_diagnostics,
           strategicContext,
           sendEvent,
         });
