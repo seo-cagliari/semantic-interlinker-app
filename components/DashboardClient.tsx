@@ -392,6 +392,74 @@ export default function DashboardClient() {
     }
   }, [report]);
 
+  const handleReplicateTopicalAuthority = useCallback(async (newLocation: string) => {
+    if (!report?.pillar_roadmaps) return;
+
+    setIsTopicalAuthorityLoading(true);
+    setTopicalAuthorityError(null);
+    setTopicalAuthorityLoadingMessage(`Avvio dell'Agente di Replicazione Geografica per "${newLocation}"...`);
+
+    const existingRoadmap = {
+        pillarRoadmaps: report.pillar_roadmaps,
+        bridgeSuggestions: report.contextual_bridges || [],
+    };
+    
+    try {
+        const response = await fetch('/api/replicate-topical-authority', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ existingRoadmap, newLocation })
+        });
+
+        if (!response.ok || !response.body) {
+            const errorData = await response.json().catch(() => ({ details: 'Server returned a non-JSON error response.' }));
+            throw new Error(errorData.details || `Server responded with status ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            let event;
+            try { event = JSON.parse(line); } catch (e) { continue; }
+            
+            if (event.type === 'error') {
+              throw new Error(event.details || event.error);
+            } else if (event.type === 'progress') {
+              setTopicalAuthorityLoadingMessage(event.message);
+            } else if (event.type === 'done') {
+              const { pillarRoadmaps, bridgeSuggestions } = event.payload as { pillarRoadmaps: PillarRoadmap[], bridgeSuggestions: BridgeArticleSuggestion[] };
+              setSavedReport(prev => {
+                  if (!prev || !prev.report.strategic_context) return null;
+                  const updatedContext: StrategicContext = { ...prev.report.strategic_context, geographic_focus: newLocation };
+                  const updatedReport: Report = { 
+                      ...prev.report, 
+                      pillar_roadmaps: pillarRoadmaps,
+                      contextual_bridges: bridgeSuggestions,
+                      strategic_context: updatedContext,
+                  };
+                  return { ...prev, report: updatedReport };
+              });
+            }
+          }
+        }
+    } catch (err) {
+      setTopicalAuthorityError(err instanceof Error ? err.message : 'Si è verificato un errore durante la replicazione della roadmap.');
+    } finally {
+      setIsTopicalAuthorityLoading(false);
+    }
+  }, [report]);
+
     const handleGenerateContentStrategy = useCallback(async () => {
         if (!report) return;
 
@@ -548,6 +616,7 @@ export default function DashboardClient() {
                         filters={filters}
                         onFiltersChange={setFilters}
                         onGenerateTopicalAuthority={handleGenerateTopicalAuthority}
+                        onReplicateTopicalAuthority={handleReplicateTopicalAuthority}
                         isTopicalAuthorityLoading={isTopicalAuthorityLoading}
                         topicalAuthorityError={topicalAuthorityError}
                         topicalAuthorityLoadingMessage={topicalAuthorityLoadingMessage}

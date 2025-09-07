@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PillarRoadmap, ContentBrief, StrategicContext, BridgeArticleSuggestion, TopicalClusterSuggestion } from '../types';
-import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon, LinkIcon, SparklesIcon } from './Icons';
+import { MapIcon, NewspaperIcon, BrainCircuitIcon, StarIcon, LoadingSpinnerIcon, XCircleIcon, LinkIcon, SparklesIcon, ArrowPathIcon } from './Icons';
 import { ContentBriefModal } from './ContentBriefModal';
 
 interface TopicalAuthorityGeneratorProps {
@@ -155,18 +155,28 @@ interface TopicalAuthorityRoadmapProps {
   roadmaps: PillarRoadmap[];
   bridgeSuggestions?: BridgeArticleSuggestion[];
   strategicContext?: StrategicContext;
+  onReplicate: (newLocation: string) => void;
+  isLoading: boolean;
 }
 
 export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => {
-  const { roadmaps, bridgeSuggestions, strategicContext } = props;
+  const { roadmaps, bridgeSuggestions, strategicContext, onReplicate, isLoading } = props;
   const [isBriefModalOpen, setIsBriefModalOpen] = useState(false);
   const [selectedBrief, setSelectedBrief] = useState<ContentBrief | null>(null);
+  const [replicationLocation, setReplicationLocation] = useState('');
 
   const handleViewBrief = (brief: ContentBrief | undefined) => {
     if (brief) {
       setSelectedBrief(brief);
       setIsBriefModalOpen(true);
     }
+  };
+
+  const handleReplicationSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (replicationLocation.trim()) {
+          onReplicate(replicationLocation.trim());
+      }
   };
 
   return (
@@ -297,6 +307,38 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
              </div>
           )}
         </div>
+        
+        {roadmaps && roadmaps.length > 0 && (
+          <div className="mt-12 p-6 bg-slate-50 rounded-2xl border border-slate-200">
+            <h3 className="text-xl font-bold text-slate-800">Replica Strategia per un'Altra Località</h3>
+            <p className="text-slate-600 mt-2 mb-4">
+              Usa questa roadmap come template per generare rapidamente una strategia adattata per un nuovo mercato geografico.
+            </p>
+            <form onSubmit={handleReplicationSubmit} className="flex items-end gap-3">
+              <div className="flex-grow">
+                  <label htmlFor="replication-location" className="block text-sm font-medium text-slate-700 mb-1">Nuova Località di destinazione</label>
+                  <input
+                    id="replication-location"
+                    type="text"
+                    value={replicationLocation}
+                    onChange={(e) => setReplicationLocation(e.target.value)}
+                    placeholder="Es: Bari"
+                    required
+                    className="w-full text-sm px-3 py-2 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500"
+                  />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="bg-slate-900 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 disabled:bg-slate-400"
+              >
+                <ArrowPathIcon className="w-5 h-5" />
+                Replica e Adatta
+              </button>
+            </form>
+          </div>
+        )}
+
       </div>
       <ContentBriefModal
         isOpen={isBriefModalOpen}

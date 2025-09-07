@@ -35,6 +35,7 @@ interface ReportDisplayProps {
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
   onGenerateTopicalAuthority: (context: StrategicContext) => void;
+  onReplicateTopicalAuthority: (newLocation: string) => void;
   isTopicalAuthorityLoading: boolean;
   topicalAuthorityError: string | null;
   topicalAuthorityLoadingMessage: string;
@@ -60,6 +61,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       deepError,
       deepAnalysisReport,
       onGenerateTopicalAuthority,
+      onReplicateTopicalAuthority,
       isTopicalAuthorityLoading,
       topicalAuthorityError,
       topicalAuthorityLoadingMessage,
@@ -206,11 +208,33 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
             </TabsContent>
 
             <TabsContent value="topical_authority">
-                {report.pillar_roadmaps ? (
+                {isTopicalAuthorityLoading ? (
+                    <div className="text-center py-16 flex flex-col items-center">
+                        <LoadingSpinnerIcon className="w-12 h-12 text-blue-600 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">Generazione della Roadmap in corso...</h3>
+                        <p className="text-slate-500 max-w-md animate-fade-in-up" key={topicalAuthorityLoadingMessage}>
+                            {topicalAuthorityLoadingMessage}
+                        </p>
+                    </div>
+                ) : topicalAuthorityError ? (
+                     <div className="text-center py-12 px-6 bg-red-50 rounded-2xl border border-red-200">
+                        <XCircleIcon className="w-10 h-10 mx-auto text-red-400 mb-3" />
+                        <h3 className="text-xl font-bold text-red-800">Errore durante l'analisi</h3>
+                        <p className="max-w-xl mx-auto text-red-700 mt-2 mb-6 text-sm">{topicalAuthorityError}</p>
+                        <button 
+                            onClick={() => onGenerateTopicalAuthority(report.strategic_context!)}
+                            className="bg-slate-700 text-white font-bold py-2 px-5 rounded-lg hover:bg-slate-800 transition-colors"
+                        >
+                            Riprova
+                        </button>
+                     </div>
+                ) : report.pillar_roadmaps ? (
                     <TopicalAuthorityRoadmap 
                         roadmaps={report.pillar_roadmaps} 
                         bridgeSuggestions={report.contextual_bridges}
                         strategicContext={report.strategic_context}
+                        onReplicate={onReplicateTopicalAuthority}
+                        isLoading={isTopicalAuthorityLoading}
                     />
                 ) : (
                    <TopicalAuthorityGenerator

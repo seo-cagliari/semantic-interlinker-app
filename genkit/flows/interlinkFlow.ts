@@ -848,7 +848,7 @@ export async function topicalAuthorityFlow(options: {
       ${existingPagesForPillar.length > 0 ? existingPagesForPillar.join('\n') : "Nessuna pagina esistente trovata per questo Pillar."}
       
       PROCESSO DI ANALISI IN 4 PASSI:
-      1. COSTRUISCI LA MAPPA IDEALE: Mentalmente, costruisci la mappa tematica ideale e completa per l'argomento "${pillar}". Pensa a tutti i sotto-argomenti, a cascata, che un vero esperto tratterebbe, dai concetti base a quelli più avanzati.
+      1. COSTRUISCI LA MAPPA IDEALE: Mentalmente, costruisci la mappa tematica ideale e completa per l'argomento "${pillar}". Pensa a tutti i sotto-argomenti, a cascata, che un vero esperto tratterrebbe, dai concetti base a quelli più avanzati.
       2. ESEGUI UN CONFRONTO CHIRURGICO: Sovrapponi la tua mappa ideale all'elenco di pagine che il sito ha già scritto.
       3. IDENTIFICA I GAP REALI: Il tuo output deve includere SOLO ed ESCLUSIVAMENTE i cluster di contenuti e gli articoli che sono MANCANTI. NON SUGGERIRE MAI contenuti già trattati, anche parzialmente, dalle pagine esistenti.
       4. EVITA LA SOVRAPPOSIZIONE: Assicurati che i suggerimenti di articoli tra cluster e pillar diversi siano unici. Se due idee di contenuto sono molto simili, proponi un singolo articolo più completo nel cluster più pertinente.
@@ -977,4 +977,56 @@ export async function topicalAuthorityFlow(options: {
   }
 
   return { pillarRoadmaps, bridgeSuggestions };
+}
+
+export async function replicateTopicalAuthorityFlow(options: {
+  existingRoadmap: { pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] };
+  newLocation: string;
+  sendEvent: (event: object) => void;
+}): Promise<{ pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] }> {
+  const { existingRoadmap, newLocation, sendEvent } = options;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+  sendEvent({ type: 'progress', message: `Adattamento della roadmap per "${newLocation}"...` });
+
+  const replicationPrompt = `
+    Sei un "Agente di Replicazione Geografica", un'IA specializzata in strategie SEO locali.
+    Il tuo compito è prendere una roadmap di contenuti strategici creata per una località specifica e adattarla in modo intelligente per una NUOVA località.
+
+    NUOVA LOCALITÀ DI DESTINAZIONE: "${newLocation}"
+
+    ROADMAP ESISTENTE (JSON):
+    ${JSON.stringify(existingRoadmap, null, 2)}
+
+    ISTRUZIONI FONDAMENTALI:
+    1.  SOSTITUZIONE INTELLIGENTE: Non fare un semplice "trova e sostituisci". Sostituisci la vecchia località (che dovrai dedurre dal contesto del JSON) con la NUOVA località ("${newLocation}") in tutti i campi pertinenti: 'title', 'strategic_summary', 'strategic_rationale', 'target_queries', 'unique_angle', 'description'.
+    2.  ADATTAMENTO CONTESTUALE: Se trovi riferimenti regionali associati alla vecchia località (es. "Sardegna" se la vecchia città era "Cagliari"), adattali alla nuova regione (es. "Puglia" se la nuova città è "Bari").
+    3.  MANTIENI LA STRUTTURA: La struttura dei dati, i punteggi ('impact_score'), i tipi di sezione ('Core'/'Outer'), e la logica strategica devono rimanere IDENTICI. Devi restituire l'intera struttura JSON, solo con i contenuti testuali adattati.
+    4.  FORMATO OUTPUT: Il tuo output deve essere ESATTAMENTE lo stesso formato JSON della roadmap esistente fornita.
+
+    Esegui l'adattamento e restituisci l'intero oggetto JSON aggiornato.
+  `;
+
+  const replicationSchema = {
+      type: Type.OBJECT,
+      properties: {
+          pillarRoadmaps: { type: Type.ARRAY, items: { type: Type.OBJECT } }, // Define schemas if needed for strictness
+          bridgeSuggestions: { type: Type.ARRAY, items: { type: Type.OBJECT } }
+      },
+      required: ["pillarRoadmaps", "bridgeSuggestions"]
+  };
+
+  const result = await generateContentWithRetry(ai, {
+    model: "gemini-2.5-flash",
+    contents: replicationPrompt,
+    config: { responseMimeType: "application/json", responseSchema: replicationSchema, seed: 42 }
+  });
+
+  if (!result.text) {
+      throw new Error("Geographic Replication Agent failed to produce a response.");
+  }
+  
+  sendEvent({ type: 'progress', message: `Finalizzazione della nuova roadmap...` });
+  
+  return JSON.parse(result.text.trim());
 }
