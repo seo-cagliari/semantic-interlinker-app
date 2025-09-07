@@ -785,16 +785,25 @@ export async function topicalAuthorityFlow(options: {
 
     ISTRUZIONI:
     Per ogni Pillar, elenca gli URL delle pagine che appartengono a quel Pillar. Una pagina può appartenere a un solo Pillar. Sii il più accurato possibile.
-    L'output deve essere un oggetto JSON dove le chiavi sono i nomi dei Pillar e i valori sono array di URL.
+    L'output deve essere un oggetto JSON con una singola chiave "mapped_content" che contiene un array di oggetti. Ogni oggetto deve avere "pillar_name" e un array "pages" con gli URL.
   `;
 
   const contentMapSchema = {
       type: Type.OBJECT,
-      properties: {},
-      additionalProperties: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING }
-      }
+      properties: {
+          mapped_content: {
+              type: Type.ARRAY,
+              items: {
+                  type: Type.OBJECT,
+                  properties: {
+                      pillar_name: { type: Type.STRING },
+                      pages: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["pillar_name", "pages"]
+              }
+          }
+      },
+      required: ["mapped_content"]
   };
   
   const mapResult = await generateContentWithRetry(ai, {
@@ -803,7 +812,12 @@ export async function topicalAuthorityFlow(options: {
     config: { responseMimeType: "application/json", responseSchema: contentMapSchema, seed: 42 }
   });
   if (!mapResult.text) throw new Error("Agent 4.2 (Content Mapper) failed to produce a response.");
-  const pageToPillarMap = JSON.parse(mapResult.text.trim()) as Record<string, string[]>;
+  
+  const mappedContentResult = JSON.parse(mapResult.text.trim()) as { mapped_content: { pillar_name: string; pages: string[] }[] };
+  const pageToPillarMap = (mappedContentResult.mapped_content || []).reduce((acc, item) => {
+      acc[item.pillar_name] = item.pages;
+      return acc;
+  }, {} as Record<string, string[]>);
 
 
   // --- AGENT 4.3: GAP ANALYSIS AGENT ---
