@@ -178,6 +178,23 @@ export const TopicalAuthorityRoadmap = (props: TopicalAuthorityRoadmapProps) => 
             <div key={pillar.pillar_name} className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm animate-fade-in-up" style={{ animationDelay: `${pillarIndex * 150}ms` }}>
               <h3 className="text-2xl font-bold text-blue-700 mb-2 border-b border-slate-200 pb-3">Pillar: {pillar.pillar_name}</h3>
               
+              {pillar.existing_pages && pillar.existing_pages.length > 0 && (
+                <details className="text-sm my-4 bg-slate-50 p-3 rounded-md border border-slate-200">
+                    <summary className="cursor-pointer font-semibold text-slate-600 hover:text-slate-800">
+                        Pagine Esistenti Analizzate per questo Pillar ({pillar.existing_pages.length})
+                    </summary>
+                    <ul className="list-disc pl-5 mt-2 text-slate-500 text-xs columns-1 sm:columns-2 md:columns-3 gap-x-4">
+                        {pillar.existing_pages.map(url => (
+                            <li key={url} className="truncate">
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="hover:underline" title={url}>
+                                    {url.replace(/https?:\/\/[^/]+\//, '/')}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </details>
+              )}
+
               <div className="flex items-start gap-3 text-sm text-slate-600 my-4 p-3 bg-slate-50 rounded-md border border-slate-200">
                   <BrainCircuitIcon className="w-5 h-5 text-slate-400 shrink-0 mt-0.5"/>
                   <p><strong className="font-semibold text-slate-700">Riepilogo Strategico:</strong> {pillar.strategic_summary}</p>

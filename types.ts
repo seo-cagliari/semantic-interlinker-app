@@ -94,6 +94,7 @@ export type PillarRoadmap = {
   pillar_name: string;
   strategic_summary: string;
   cluster_suggestions: TopicalClusterSuggestion[];
+  existing_pages: string[]; // Pagine esistenti del sito mappate a questo pillar
 };
 
 export type BridgeArticleSuggestion = {

@@ -223,265 +223,207 @@ ${options.ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions},
       internalLinksMap,
       allPagesWithContent.map(p => ({ url: p.link, title: p.title })),
       (current, total) => {
-        options.sendEvent({ type: 'progress', message: `Calcolo Autorità: iterazione ${current} di ${total}...` });
+        options.sendEvent({ type: 'progress', message: `Calcolo Autorità Interna (iterazione ${current}/${total})...` });
       }
   );
-  
+
   const pageDiagnostics: PageDiagnostic[] = pagesWithScores.map(p => ({
-      url: p.url,
-      title: p.title,
-      internal_authority_score: p.score
+    url: p.url,
+    title: p.title,
+    internal_authority_score: p.score,
   }));
   
-  const opportunityHubData = calculateOpportunityHub(options.gscData, pageDiagnostics);
-
-  options.sendEvent({ type: 'progress', message: `Fase 0 completa. Calcolata l'autorità per ${pageDiagnostics.length} pagine.` });
-
-  const allSiteUrls = pageDiagnostics.map(p => p.url);
-  if (allSiteUrls.length === 0) {
-    throw new Error("Could not find any published posts or pages on the specified WordPress site.");
-  }
-
-  // --- COMMON CALLBACK FOR GEMINI RETRIES ---
-  const onRetryCallback = (attempt: number, delay: number) => {
-    options.sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
-  };
-
+  options.sendEvent({ type: 'progress', message: `Calcolo delle Opportunità di Crescita...` });
+  const opportunityHub = calculateOpportunityHub(options.gscData, pageDiagnostics);
 
   // --- AGENT 1: INFORMATION ARCHITECT ---
   options.sendEvent({ type: 'progress', message: "Agente 1: L'Architetto dell'Informazione sta analizzando la struttura del sito..." });
-  const clusterPrompt = `
-    Agisci come un architetto dell'informazione e un esperto SEO per il sito "${options.site_root}".
-    Il tuo compito è analizzare la struttura del sito e i dati di performance per raggruppare gli URL in 3-6 cluster tematici.
+  const allPagesList = allPagesWithContent.map(p => `"${p.title}": ${p.link}`).join('\n');
+
+  const architectPrompt = `
+    Sei un Architetto dell'Informazione e un SEO Strategist di fama mondiale.
+    Il tuo compito è analizzare la seguente lista di pagine da un sito WordPress e raggrupparle in cluster tematici coerenti.
+    Per ogni cluster, fornisci un nome conciso e una breve descrizione (1-2 frasi) del suo scopo.
     
-    DATI DISPONIBILI:
-    1. Elenco completo degli URL del sito:
-    ${allSiteUrls.join('\n')}
-
-    2. Dati di performance da Google Search Console:
-    ${gscDataStringForPrompt}
-
-    ISTRUZIONI STRATEGICHE:
-    - Usa i dati GSC per capire quali argomenti generano più impressioni. I cluster principali dovrebbero riflettere questi argomenti.
-    - Raggruppa gli URL in cluster tematici significativi, fornendo un nome, una descrizione e un elenco di pagine per ciascuno.
-    - La tua risposta DEVE essere un oggetto JSON valido in lingua italiana.
+    SITO: ${options.site_root}
+    
+    LISTA DI PAGINE (TITOLO: URL):
+    ${allPagesList}
+    
+    ISTRUZIONI:
+    1.  Crea tra 4 e 7 cluster tematici principali. Non essere troppo granulare.
+    2.  Ogni pagina deve appartenere a un solo cluster.
+    3.  I nomi dei cluster devono essere significativi e rappresentare il contenuto (es. "Servizi di Sviluppo Web", "Marketing dei Contenuti e Blog", "Risorse Aziendali").
+    4.  Le descrizioni devono spiegare lo scopo del cluster e il tipo di contenuto che raggruppa.
   `;
-  const clusterSchema = {
-    type: Type.OBJECT,
-    properties: {
-      thematic_clusters: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            cluster_name: { type: Type.STRING },
-            cluster_description: { type: Type.STRING },
-            pages: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["cluster_name", "cluster_description", "pages"]
-        }
-      }
-    },
-    required: ["thematic_clusters"]
+  const architectSchema = {
+      type: Type.OBJECT,
+      properties: {
+          thematic_clusters: {
+              type: Type.ARRAY,
+              items: {
+                  type: Type.OBJECT,
+                  properties: {
+                      cluster_name: { type: Type.STRING },
+                      cluster_description: { type: Type.STRING },
+                      pages: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["cluster_name", "cluster_description", "pages"]
+              }
+          }
+      },
+      required: ["thematic_clusters"]
   };
-  let thematicClusters: ThematicCluster[] = [];
-  try {
-    const clusterResponse = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: clusterPrompt,
-        config: { responseMimeType: "application/json", responseSchema: clusterSchema, seed: 42 },
-    }, 4, 1000, onRetryCallback);
-    const responseText = clusterResponse.text;
-    if (!responseText) throw new Error("Received empty response during clustering.");
-    thematicClusters = JSON.parse(responseText.trim()).thematic_clusters;
-    options.sendEvent({ type: 'progress', message: `Agente 1 completo. Identificati ${thematicClusters.length} cluster tematici.` });
-  } catch (e) {
-    const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-    throw new Error(`Agent 1 (Information Architect) failed. Error: ${detailedError}`);
-  }
+  const architectResult = await generateContentWithRetry(ai, {
+      model: "gemini-2.5-flash",
+      contents: architectPrompt,
+      config: { responseMimeType: "application/json", responseSchema: architectSchema, seed: 42 }
+  });
+  
+  if (!architectResult.text) throw new Error("Agent 1 (Information Architect) failed to produce a response.");
+  const { thematic_clusters } = JSON.parse(architectResult.text.trim()) as { thematic_clusters: ThematicCluster[] };
 
   // --- AGENT 2: SEMANTIC LINKING STRATEGIST ---
   options.sendEvent({ type: 'progress', message: "Agente 2: Lo Stratega Semantico sta generando suggerimenti di link..." });
-  let suggestionPrompt = `
-    Agisci come un esperto SEO di livello mondiale specializzato in internal linking semantico per "${options.site_root}", seguendo i principi della metodologia Holistic SEO.
-    
-    CONTESTO:
-    1. La struttura del sito è stata organizzata nei seguenti cluster tematici:
-    ${JSON.stringify(thematicClusters, null, 2)}
-    
-    2. Hai accesso ai dati di performance di Google Search Console:
-    ${gscDataStringForPrompt}
 
-    3. Dati Comportamentali da Google Analytics 4:
+  // Dynamically create a list of page titles and URLs for the prompt context
+  const pageContextForPrompt = pageDiagnostics.map(p => `Pagina: "${p.title}" (URL: ${p.url}, Autorità: ${p.internal_authority_score.toFixed(1)}/10)`).join('\n');
+  
+  // Strategy-based filtering
+  let candidatePagesForPrompt = allPagesWithContent;
+  let strategyDescription = "Strategia di analisi: Globale. Analizza tutte le pagine del sito per opportunità di linking interno.";
+  if (options.strategyOptions) {
+      const { strategy, targetUrls } = options.strategyOptions;
+      if (strategy === 'pillar' && targetUrls.length > 0) {
+          const pillarUrl = targetUrls[0];
+          const pillarCluster = thematic_clusters.find(c => c.pages.includes(pillarUrl));
+          if (pillarCluster) {
+              candidatePagesForPrompt = allPagesWithContent.filter(p => pillarCluster.pages.includes(p.link));
+              strategyDescription = `Strategia di analisi: Pillar Page. L'analisi è focalizzata sul cluster "${pillarCluster.cluster_name}" per rafforzare la sua coerenza interna, partendo dalla pagina pillar: ${pillarUrl}.`;
+          }
+      } else if (strategy === 'money' && targetUrls.length > 0) {
+          const moneyPageUrl = targetUrls[0];
+          candidatePagesForPrompt = allPagesWithContent; // Global scope, but focus is on linking TO the money page
+          strategyDescription = `Strategia di analisi: Money Page. L'obiettivo primario è trovare opportunità per linkare verso la pagina ad alta conversione: ${moneyPageUrl}, aumentandone l'autorità.`;
+      }
+  }
+
+  const candidatePagesList = candidatePagesForPrompt.map(p => `- URL: ${p.link}\n  Titolo: "${p.title}"\n  Contenuto (estratto): "${p.content.substring(0, 300).replace(/\s+/g, ' ')}..."`).join('\n\n');
+  
+  const suggestionPrompt = `
+    Sei un SEO Strategist di livello mondiale, specializzato in linking interno semantico e nella metodologia di Koray Tuğberk Gübür.
+    Il tuo compito è analizzare un sito web e generare 10 suggerimenti di link interni di altissima qualità.
+    
+    SITO: ${options.site_root}
+    ${strategyDescription}
+    
+    CONTESTO STRATEGICO (se disponibile):
+    ${pageContextForPrompt}
+    ${gscDataStringForPrompt}
     ${ga4DataStringForPrompt}
 
-    IL TUO COMPITO:
-    Genera un elenco di 10 suggerimenti di link interni ad alto impatto, seguendo la strategia definita.
-  `;
-    
-  const strategy = options.strategyOptions?.strategy || 'global';
-  const targetUrls = options.strategyOptions?.targetUrls || [];
+    PAGINE CANDIDATE PER L'ANALISI:
+    ${candidatePagesList}
 
-  if (strategy === 'pillar' && targetUrls.length > 0) {
-      suggestionPrompt += `
-      MODALITÀ STRATEGICA: "Pillar Page"
-      OBIETTIVO PRIMARIO: Rafforzare l'autorità della seguente pagina pilastro: ${targetUrls[0]}
-      ISTRUZIONI SPECIFICHE:
-      - La maggior parte dei suggerimenti (almeno 7 su 10) devono essere link IN ENTRATA che puntano verso la pagina pilastro.
-      - Trova pagine di supporto semanticamente correlate ("cluster content") e suggerisci link da esse verso la pagina pilastro.
-      - Usa anchor text pertinenti che rafforzino il topic principale della pillar page.
-      `;
-  } else if (strategy === 'money' && targetUrls.length > 0) {
-      suggestionPrompt += `
-      MODALITÀ STRATEGICA: "Money Page"
-      OBIETTIVO PRIMARIO: Canalizzare autorità e traffico verso la seguente pagina commerciale: ${targetUrls[0]}
-      ISTRUZIONI SPECIFICHE:
-      - Identifica articoli informativi o pagine con alta autorità interna che siano tematicamente collegati alla money page.
-      - Suggerisci link contestuali DA queste pagine di supporto VERSO la money page per guidare l'utente nel funnel di conversione.
-      - La motivazione semantica deve riflettere questo obiettivo strategico.
-      `;
-  } else { // global
-      suggestionPrompt += `
-      MODALITÀ STRATEGICA: "Analisi Globale"
-      OBIETTIVO PRIMARIO: Identificare le migliori opportunità di linking in tutto il sito per migliorare il posizionamento generale e gli obiettivi di business.
-      ISTRUZIONI SPECIFICHE:
-      - IDENTIFICA LE "QUERY OPPORTUNITÀ": Cerca nei dati GSC le query con alte impressioni ma basso CTR.
-      - DAI PRIORITÀ AI LINK DATA-DRIVEN: I tuoi suggerimenti migliori dovrebbero aiutare le pagine a posizionarsi meglio per queste "query opportunità".
-      - RAFFORZA I CLUSTER: Suggerisci link che rinforzino la coerenza dei cluster tematici.
-      `;
-  }
-
-  suggestionPrompt += `
-    ISTRUZIONI AVANZATE (DA APPLICARE A TUTTI I SUGGERIMENTI):
-    1. CLASSIFICAZIONE PAGINE (Core/Outer): Inferisci la natura strategica delle pagine.
-       - Le pagine 'Core' sono quelle transazionali (servizi, prodotti, contatti) o quelle con alte conversioni in GA4.
-       - Le pagine 'Outer' sono quelle informative (articoli di blog, guide, news).
-       - Dai priorità ai link che vanno da pagine 'Outer' a pagine 'Core' per canalizzare autorità verso la monetizzazione.
-    2. POSIZIONAMENTO STRATEGICO DEL LINK: Per 'insertion_hint', quando un link è strategico (es. Outer -> Core), suggerisci posizioni verso la fine del contenuto per massimizzare la probabilità che venga cliccato dopo che l'utente ha letto il contesto.
-    3. ANALISI DELL'INTENTO: Per ogni suggerimento, valuta la compatibilità dell'intento di ricerca tra la pagina di origine e quella di destinazione (es. "Ottimo, da informativo a transazionale per guidare l'utente."). Aggiungi un commento su questo nel campo 'intent_alignment_comment'.
-    4. DIAGNOSI CANNIBALIZZAZIONE: Usa i dati GSC per verificare se la pagina di origine e quella di destinazione competono per le stesse query principali.
-       - Se rilevi un rischio, imposta 'potential_cannibalization' a true. Poi, popola 'cannibalization_details' con:
-         - 'competing_queries': un array con le 1-3 query principali per cui competono.
-         - 'remediation_steps': un array con 1-2 consigli pratici per risolvere il problema (es. "Differenziare l'intento delle pagine", "Consolidare l'autorità sulla pagina target").
-       - Se non c'è rischio, imposta 'potential_cannibalization' a false e lascia 'cannibalization_details' vuoto o nullo.
-    5. USA I DATI COMPORTAMENTALI: Sfrutta i dati GA4 per decisioni strategiche.
-       - Pagine con alto tasso di conversione o engagement sono preziose. Suggerisci link VERSO di esse per capitalizzare sul loro successo.
-       - Pagine con molto traffico ma basso engagement o poche conversioni sono 'punti deboli'. Suggerisci link DA esse verso pagine più performanti.
-    6. PUNTEGGIO STRATEGICO: Assegna uno 'score' da 0.0 a 1.0. Un punteggio > 0.75 è per suggerimenti che collegano pagine con alta autorità a pagine con alto potenziale di business (identificate tramite GA4 o query GSC a basso CTR), o che rafforzano significativamente una 'Pillar Page' o 'Money Page' secondo la strategia attiva. Varia gli anchor text e non riutilizzare lo stesso più di 3 volte per pagina.
-    7. REGOLE GENERALI: Fornisci tutti gli output testuali in italiano e rispetta lo schema JSON. Per i risk_checks, imposta 'target_status' a 200, e 'target_indexable' e 'canonical_ok' a true, ma calcola 'potential_cannibalization' e 'cannibalization_details' come descritto.
+    ISTRUZIONI FONDAMENTALI:
+    1.  PRIORITÀ ALLA STRATEGIA: Dai la massima priorità ai link che supportano il funnel di conversione. Un link da una pagina informativa ('Outer Section') a una pagina transazionale ('Core Section') ha un valore altissimo. Usa l'analisi dell'intento per guidare queste decisioni.
+    2.  NON LINKARE PAGINE IDENTICHE: Evita di suggerire link tra pagine con contenuto quasi identico o che competono per le stesse query (cannibalizzazione). Se rilevi un rischio, segnalalo.
+    3.  QUALITÀ SOPRA LA QUANTITÀ: Fornisci solo 10 suggerimenti che abbiano un impatto strategico reale.
+    4.  POSIZIONAMENTO STRATEGICO: Per i link ad alto valore strategico (es. Outer -> Core), suggerisci una posizione 'late' (verso la fine del contenuto) per massimizzare l'engagement. Per altri link, valuta la posizione più naturale.
+    5.  VARIAZIONE ANCHOR TEXT: Fornisci sempre 3 varianti per l'anchor text, usando sinonimi o frasi correlate per diversificare il profilo di link.
+    6.  LOGICA DELL'INTENTO: Commenta sempre l'allineamento degli intenti (es. "da informativo a transazionale").
   `;
 
-    const suggestionSchema = {
-    type: Type.OBJECT,
-    properties: {
-      suggestions: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            suggestion_id: { type: Type.STRING },
-            source_url: { type: Type.STRING },
-            target_url: { type: Type.STRING },
-            proposed_anchor: { type: Type.STRING },
-            anchor_variants: { type: Type.ARRAY, items: { type: Type.STRING } },
-            insertion_hint: {
-              type: Type.OBJECT,
-              properties: {
-                block_type: { type: Type.STRING },
-                position_hint: { type: Type.STRING },
-                reason: { type: Type.STRING },
-              },
-              required: ["block_type", "position_hint", "reason"],
-            },
-            semantic_rationale: {
-              type: Type.OBJECT,
-              properties: {
-                topic_match: { type: Type.STRING },
-                entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
-                intent_alignment_comment: { type: Type.STRING, description: "Commento sulla coerenza dell'intento di ricerca." }
-              },
-              required: ["topic_match", "entities_in_common"],
-            },
-            risk_checks: {
-              type: Type.OBJECT,
-              properties: {
-                potential_cannibalization: { type: Type.BOOLEAN, description: "Indica se c'è un rischio di cannibalizzazione." },
-                cannibalization_details: { 
+  const suggestionSchema = {
+      type: Type.OBJECT,
+      properties: {
+          suggestions: {
+              type: Type.ARRAY,
+              items: {
                   type: Type.OBJECT,
                   properties: {
-                    competing_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    remediation_steps: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      suggestion_id: { type: Type.STRING },
+                      source_url: { type: Type.STRING },
+                      target_url: { type: Type.STRING },
+                      proposed_anchor: { type: Type.STRING },
+                      anchor_variants: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      insertion_hint: {
+                          type: Type.OBJECT,
+                          properties: {
+                              block_type: { type: Type.STRING },
+                              position_hint: { type: Type.STRING },
+                              reason: { type: Type.STRING }
+                          },
+                          required: ["block_type", "position_hint", "reason"]
+                      },
+                      semantic_rationale: {
+                          type: Type.OBJECT,
+                          properties: {
+                              topic_match: { type: Type.STRING },
+                              entities_in_common: { type: Type.ARRAY, items: { type: Type.STRING } },
+                              intent_alignment_comment: { type: Type.STRING }
+                          },
+                          required: ["topic_match", "entities_in_common", "intent_alignment_comment"]
+                      },
+                      risk_checks: {
+                          type: Type.OBJECT,
+                          properties: {
+                              target_status: { type: Type.INTEGER },
+                              target_indexable: { type: Type.BOOLEAN },
+                              canonical_ok: { type: Type.BOOLEAN },
+                              dup_anchor_in_block: { type: Type.BOOLEAN },
+                              potential_cannibalization: { type: Type.BOOLEAN },
+                              cannibalization_details: {
+                                  type: Type.OBJECT,
+                                  properties: {
+                                      competing_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                      remediation_steps: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                  }
+                              }
+                          },
+                          required: ["target_status", "target_indexable", "canonical_ok", "dup_anchor_in_block", "potential_cannibalization"]
+                      },
+                      score: { type: Type.NUMBER }
                   },
-                  description: "Dettagli sulla cannibalizzazione." 
-                }
-              },
-              required: ["potential_cannibalization"],
-            },
-            score: { type: Type.NUMBER },
-            notes: { type: Type.STRING },
-            apply_mode: { type: Type.STRING },
-          },
-          required: [
-            "suggestion_id", "source_url", "target_url", "proposed_anchor",
-            "insertion_hint", "semantic_rationale", "risk_checks", "score"
-          ],
-        },
+                  required: ["suggestion_id", "source_url", "target_url", "proposed_anchor", "anchor_variants", "insertion_hint", "semantic_rationale", "risk_checks", "score"]
+              }
+          }
       },
-    },
-    required: ["suggestions"],
+      required: ["suggestions"]
   };
-  
-  let reportSuggestions: Suggestion[] = [];
-  try {
-     const suggestionResponse = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: suggestionPrompt,
-        config: { responseMimeType: "application/json", responseSchema: suggestionSchema, seed: 42 },
-    }, 4, 1000, onRetryCallback);
-    const responseText = suggestionResponse.text;
-    if (responseText) {
-        const parsedSuggestions = JSON.parse(responseText.trim()).suggestions;
-        reportSuggestions = parsedSuggestions.map((s: Partial<Suggestion>) => ({
-            ...s,
-            suggestion_id: s.suggestion_id || `sugg-${Math.random()}`,
-            risk_checks: {
-                target_status: 200,
-                target_indexable: true,
-                canonical_ok: true,
-                dup_anchor_in_block: false,
-                potential_cannibalization: s.risk_checks?.potential_cannibalization ?? false,
-                cannibalization_details: s.risk_checks?.potential_cannibalization ? s.risk_checks.cannibalization_details : undefined
-            }
-        }) as Suggestion);
-    }
-      options.sendEvent({ type: 'progress', message: `Agente 2 completo. Generati ${reportSuggestions.length} suggerimenti basati sulla strategia "${strategy}".` });
-  } catch(e) {
-      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-      throw new Error(`Agent 2 (Semantic Linking Strategist) failed. Error: ${detailedError}`);
-  }
+  const suggestionResult = await generateContentWithRetry(ai, {
+      model: "gemini-2.5-flash",
+      contents: suggestionPrompt,
+      config: { responseMimeType: "application/json", responseSchema: suggestionSchema, seed: 42 }
+  }, 4, 1000, (attempt, delay) => {
+    options.sendEvent({ type: 'progress', message: `Agente 2 in attesa (tentativo ${attempt}). Riprovo tra ${Math.round(delay/1000)}s...` });
+  });
 
-  options.sendEvent({ type: 'progress', message: "Quasi finito, sto compilando il report finale..." });
+  if (!suggestionResult.text) throw new Error("Agent 2 (Semantic Linking Strategist) failed to produce a response.");
+  const { suggestions } = JSON.parse(suggestionResult.text.trim()) as { suggestions: Suggestion[] };
 
+  // FINAL REPORT ASSEMBLY
+  options.sendEvent({ type: 'progress', message: "Finalizzazione del report strategico..." });
   const finalReport: Report = {
-    site: options.site_root,
-    gscSiteUrl: options.gscSiteUrl,
-    generated_at: new Date().toISOString(),
-    thematic_clusters: thematicClusters,
-    suggestions: reportSuggestions,
-    content_gap_suggestions: [], // Sarà popolato on-demand
-    page_diagnostics: pageDiagnostics,
-    opportunity_hub: opportunityHubData,
-    internal_links_map: internalLinksMap,
-    gscData: options.gscData,
-    ga4Data: options.ga4Data,
-    summary: {
-        pages_scanned: allSiteUrls.length,
-        indexable_pages: allSiteUrls.length,
-        suggestions_total: reportSuggestions.length,
-        high_priority: reportSuggestions.filter((s: any) => s.score >= 0.75).length,
-    }
+      site: options.site_root,
+      gscSiteUrl: options.gscSiteUrl,
+      generated_at: new Date().toISOString(),
+      summary: {
+          pages_scanned: allPagesWithContent.length,
+          indexable_pages: allPagesWithContent.length, // Placeholder, can be refined
+          suggestions_total: suggestions.length,
+          high_priority: suggestions.filter(s => s.score >= 0.75).length,
+      },
+      thematic_clusters,
+      suggestions,
+      content_gap_suggestions: [], // Inizialmente vuoto, verrà popolato on-demand
+      page_diagnostics: pageDiagnostics,
+      opportunity_hub: opportunityHub,
+      internal_links_map: internalLinksMap,
+      gscData: options.gscData,
+      ga4Data: options.ga4Data
   };
-  
+
   options.sendEvent({ type: 'done', payload: finalReport });
 }
 
@@ -494,125 +436,289 @@ export async function contentStrategyFlow(options: {
   strategicContext?: StrategicContext;
   sendEvent: (event: object) => void;
 }): Promise<ContentGapSuggestion[]> {
-    const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, strategicContext, sendEvent } = options;
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const { site_root, thematic_clusters, gscData, ga4Data, seozoomApiKey, strategicContext, sendEvent } = options;
+  sendEvent({ type: 'progress', message: "Agente 3: Lo Stratega dei Contenuti sta analizzando i dati..." });
+  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  
+  const hasGscData = gscData && gscData.length > 0;
+  const gscPromptPart = hasGscData
+    ? `Dati GSC (prime 100 righe):
+      ${gscData?.slice(0, 100).map(r => `${r.keys[0]}, ${r.keys[1]}, ${r.impressions}, ${r.ctr.toFixed(4)}`).join('\n')}
+      Usa questi dati per identificare query con alte impressioni e basso CTR.`
+    : "Nessun dato GSC fornito.";
+  
+  const ga4PromptPart = (ga4Data && ga4Data.length > 0)
+    ? `Dati GA4 (prime 100 righe):
+      ${ga4Data?.slice(0,100).map(r => `${r.pagePath}, sessions: ${r.sessions}, engagement: ${r.engagementRate.toFixed(2)}`).join('\n')}
+      Usa questi dati per identificare pagine popolari ma con basso engagement, che potrebbero beneficiare di contenuti di supporto.`
+    : "Nessun dato GA4 fornito.";
     
-    const onRetryCallback = (attempt: number, delay: number) => {
-        sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
-    };
+  const strategicContextPromptPart = strategicContext
+    ? `CONTESTO DI BUSINESS FONDAMENTALE:
+      - Obiettivo del sito (Source Context): "${strategicContext.source_context}"
+      - Intento dell'utente target (Central Intent): "${strategicContext.central_intent}"
+      I tuoi suggerimenti devono essere STRETTAMENTE allineati a questi obiettivi.`
+    : "Nessun contesto di business fornito. Basa i suggerimenti sul potenziale di traffico generale.";
 
-    const hasGscData = gscData && gscData.length > 0;
-    const gscDataStringForPrompt = hasGscData
-        ? `Dati di performance da Google Search Console:
-    Formato: 'query', 'pagina', 'impressioni', 'ctr'
-    ${gscData?.slice(0, 200).map(row => `"${row.keys[0]}", "${row.keys[1]}", ${row.impressions}, ${row.ctr}`).join('\n')}
-    ${gscData!.length > 200 ? `(e altri ${gscData!.length - 200} record)` : ''}`
-        : "Non sono stati forniti dati da Google Search Console.";
+  const contentPrompt = `
+    Sei un Content Strategist e SEO di livello mondiale. Il tuo compito è analizzare i dati di un sito per trovare opportunità di contenuto (content gap) strategiche.
     
-    const hasGa4Data = ga4Data && ga4Data.length > 0;
-    const ga4DataStringForPrompt = hasGa4Data
-        ? `Dati comportamentali da Google Analytics 4:
-    Formato: 'pagePath', 'sessions', 'engagementRate', 'conversions'
-    ${ga4Data?.slice(0, 150).map(row => `'${row.pagePath}', ${row.sessions}, ${row.engagementRate.toFixed(2)}, ${row.conversions}`).join('\n')}`
-        : "Non sono stati forniti dati da Google Analytics 4.";
-        
-    const strategicContextString = strategicContext ? `CONTESTO STRATEGICO DI BUSINESS (DA USARE COME FILTRO PRIMARIO):
-        - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
-        - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"`
-        : "Nessun contesto di business fornito. Basa l'analisi solo sui dati di performance.";
+    SITO: ${site_root}
+    ${strategicContextPromptPart}
 
-    // --- AGENT 3: CONTENT STRATEGIST ---
-    sendEvent({ type: 'progress', message: "Agente 3: Il Content Strategist sta cercando 'content gap'..." });
-    const contentGapPrompt = `
-        Agisci come un SEO Content Strategist di livello mondiale per "${site_root}".
-
-        ${strategicContextString}
-
-        DATI DISPONIBILI:
-        1. Cluster tematici del sito:
-        ${JSON.stringify(thematic_clusters.map(c => ({ name: c.cluster_name, description: c.cluster_description })), null, 2)}
-        2. ${gscDataStringForPrompt}
-        3. ${ga4DataStringForPrompt}
-
-        IL TUO COMPITO:
-        Identifica le lacune di contenuto strategiche e **prioritizzale in base al loro potenziale commerciale**.
-
-        ISTRUZIONI STRATEGICHE:
-        1.  **IDENTIFICA GAP DI PERFORMANCE:** Cerca nei dati GSC le query con alte impressioni ma basso CTR o le pagine con molto traffico (GSC/GA4) ma basso engagement/conversioni (GA4).
-        2.  **FILTRA PER RILEVANZA COMMERCIALE:** Valuta ogni gap identificato rispetto al "Source Context". Un gap su un argomento non allineato al business ha bassa priorità. Un gap su un argomento che supporta direttamente l'obiettivo di business è ad alta priorità.
-        3.  **ASSEGNA UN PUNTEGGIO DI OPPORTUNITÀ:** Per ogni suggerimento, assegna un \`commercial_opportunity_score\` da 1 a 10.
-            -   Un punteggio alto (8-10) indica un'opportunità che (A) ha un forte segnale di domanda nei dati (alte impressioni) E (B) è strettamente allineata al "Source Context" del business.
-            -   Un punteggio basso (1-4) indica un'opportunità con segnali di domanda più deboli o meno allineata al business.
-        4.  **FORNISCI UNA MOTIVAZIONE:** Nel campo \`commercial_opportunity_rationale\`, spiega brevemente perché hai assegnato quel punteggio, collegando i dati di performance all'obiettivo di business.
-        5.  **SUGGERISCI CONTENUTI MIRATI:** Proponi 3-5 nuovi articoli per colmare i gap a più alta priorità. Identifica la "target_query" principale per ciascuno.
-        6.  **REGOLE FINALI:** Fornisci tutti gli output in italiano e rispetta lo schema JSON.
-    `;
-    const contentGapSchema = {
-        type: Type.OBJECT,
-        properties: {
-            content_gap_suggestions: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        relevant_cluster: { type: Type.STRING },
-                        target_query: { type: Type.STRING, description: "La query di ricerca principale che questo contenuto dovrebbe targettizzare." },
-                        commercial_opportunity_score: { type: Type.NUMBER, description: "Punteggio di opportunità commerciale da 1 a 10." },
-                        commercial_opportunity_rationale: { type: Type.STRING, description: "Spiegazione del punteggio." }
-                    },
-                    required: ["title", "description", "relevant_cluster", "target_query", "commercial_opportunity_score", "commercial_opportunity_rationale"]
-                }
+    CLUSTER TEMATICI ESISTENTI:
+    ${thematic_clusters.map(c => `- ${c.cluster_name}: ${c.cluster_description}`).join('\n')}
+    
+    DATI DI PERFORMANCE:
+    ${gscPromptPart}
+    ${ga4PromptPart}
+    
+    ISTRUZIONI:
+    1.  Analizza tutti i dati forniti per identificare 5-7 opportunità di contenuto mancanti che rafforzino i cluster esistenti o ne creino di nuovi e strategici.
+    2.  Per ogni suggerimento, fornisci un titolo accattivante e una breve descrizione che spieghi perché è un'opportunità.
+    3.  Assegna ogni suggerimento al cluster tematico più pertinente.
+    4.  **PRIORITIZZAZIONE COMMERCIALE**: Assegna un 'commercial_opportunity_score' da 1 a 10. Un punteggio alto (8-10) significa che il contenuto è strettamente allineato al 'Source Context', intercetta un intento transazionale e può portare direttamente a conversioni. Un punteggio basso (1-4) indica un contenuto più informativo ('Outer Section') che costruisce fiducia ma è lontano dalla conversione.
+    5.  Fornisci una motivazione chiara ('commercial_opportunity_rationale') per il punteggio assegnato.
+    6.  Se trovi una query specifica e rilevante nei dati GSC, includila come 'target_query'.
+    7.  **NON** suggerire contenuti che molto probabilmente esistono già basandoti sui nomi dei cluster. Cerca lacune evidenti.
+  `;
+  const contentSchema = {
+    type: Type.OBJECT,
+    properties: {
+        content_gap_suggestions: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    relevant_cluster: { type: Type.STRING },
+                    target_query: { type: Type.STRING },
+                    commercial_opportunity_score: { type: Type.NUMBER },
+                    commercial_opportunity_rationale: { type: Type.STRING }
+                },
+                required: ["title", "description", "relevant_cluster", "commercial_opportunity_score", "commercial_opportunity_rationale"]
             }
         }
-    };
+    },
+    required: ["content_gap_suggestions"]
+  };
+  
+  const contentResult = await generateContentWithRetry(ai, {
+    model: "gemini-2.5-flash",
+    contents: contentPrompt,
+    config: { responseMimeType: "application/json", responseSchema: contentSchema, seed: 42 }
+  });
+  
+  if (!contentResult.text) throw new Error("Agent 3 (Content Strategist) failed to generate response.");
+  const { content_gap_suggestions } = JSON.parse(contentResult.text.trim()) as { content_gap_suggestions: ContentGapSuggestion[] };
 
-    let contentGapSuggestions: ContentGapSuggestion[] = [];
-    try {
-        const contentGapResponse = await generateContentWithRetry(ai, {
-            model: "gemini-2.5-flash",
-            contents: contentGapPrompt,
-            config: { responseMimeType: "application/json", responseSchema: contentGapSchema, seed: 42 },
-        }, 4, 1000, onRetryCallback);
-        const responseText = contentGapResponse.text;
-        if (responseText) {
-            const parsedSuggestions = JSON.parse(responseText.trim()).content_gap_suggestions;
-
-            if (seozoomApiKey && parsedSuggestions.length > 0) {
-                sendEvent({ type: 'progress', message: `Arricchimento dei dati con SEOZoom per ${parsedSuggestions.length} opportunità...` });
-                
-                const enrichmentPromises = parsedSuggestions.map(async (suggestion: ContentGapSuggestion) => {
-                    if (suggestion.target_query) {
-                        try {
-                            const seoData = await seozoom.getKeywordData(suggestion.target_query, seozoomApiKey!);
-                            return {
-                                ...suggestion,
-                                search_volume: seoData.search_volume,
-                                keyword_difficulty: seoData.keyword_difficulty,
-                                search_intent: seoData.search_intent,
-                            };
-                        } catch (e) {
-                            console.error(`Failed to enrich suggestion for query "${suggestion.target_query}"`, e);
-                            return suggestion; // Return original suggestion on error
-                        }
-                    }
-                    return suggestion;
-                });
-
-                contentGapSuggestions = await Promise.all(enrichmentPromises);
-                sendEvent({ type: 'progress', message: "Arricchimento SEOZoom completo." });
-            } else {
-                contentGapSuggestions = parsedSuggestions;
-            }
+  if (seozoomApiKey) {
+    sendEvent({ type: 'progress', message: "Arricchimento dei suggerimenti con dati di mercato SEOZoom..." });
+    for (let i = 0; i < content_gap_suggestions.length; i++) {
+        const suggestion = content_gap_suggestions[i];
+        if (suggestion.target_query) {
+             sendEvent({ type: 'progress', message: `Recupero dati per: "${suggestion.target_query}" (${i+1}/${content_gap_suggestions.length})` });
+             const keywordData = await seozoom.getKeywordData(suggestion.target_query, seozoomApiKey);
+             suggestion.search_volume = keywordData.search_volume;
+             suggestion.keyword_difficulty = keywordData.keyword_difficulty;
+             suggestion.search_intent = keywordData.search_intent;
         }
-        sendEvent({ type: 'progress', message: `Agente 3 completo. Identificate ${contentGapSuggestions.length} opportunità di contenuto.` });
-    } catch(e) {
-        console.error("Error during Content Gap Analysis phase:", e);
-        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-        throw new Error(`Agent 3 (Content Strategist) failed. Error: ${detailedError}`);
     }
-    return contentGapSuggestions;
+  }
+
+  return content_gap_suggestions;
+}
+
+export async function deepAnalysisFlow(options: {
+  pageUrl: string;
+  pageDiagnostics: PageDiagnostic[];
+  gscData?: GscDataRow[];
+  strategicContext?: StrategicContext;
+  thematic_clusters?: ThematicCluster[];
+}): Promise<DeepAnalysisReport> {
+  const { pageUrl, pageDiagnostics, gscData, strategicContext, thematic_clusters } = options;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+  const pageContent = await wp.getPageContent(pageUrl);
+  const pageInfo = pageDiagnostics.find(p => p.url === pageUrl);
+  
+  const pageListForContext = pageDiagnostics.map(p => `- ${p.title} (${p.url})`).join('\n');
+  const gscDataForPage = gscData?.filter(row => row.keys[1] === pageUrl).slice(0, 50);
+  const opportunityQueries = gscDataForPage?.filter(q => q.impressions > 50 && q.ctr < 0.03) || [];
+  
+  const strategicContextPromptPart = (strategicContext && thematic_clusters)
+    ? `CONTESTO STRATEGICO FONDAMENTALE:
+      - Obiettivo del sito (Source Context): "${strategicContext.source_context}"
+      - Cluster tematici del sito: ${thematic_clusters.map(c => c.cluster_name).join(', ')}
+      - Questa analisi deve essere allineata a questi obiettivi.`
+    : "Nessun contesto strategico fornito. Esegui un'analisi SEO generica.";
+
+  const deepAnalysisPrompt = `
+    Sei un "Semantic SEO Coach", un'intelligenza artificiale esperta in SEO olistica (metodologia Koray Gübür), content strategy e analisi dei dati.
+    Il tuo compito è eseguire un'analisi approfondita di una singola pagina web e fornire un piano d'azione strategico.
+    
+    ${strategicContextPromptPart}
+
+    PAGINA DA ANALIZZARE:
+    - URL: ${pageUrl}
+    - Titolo: "${pageInfo?.title}"
+    - Punteggio di Autorità Interna: ${pageInfo?.internal_authority_score.toFixed(2)}/10
+    - Contenuto (testo pulito): """
+      ${pageContent.substring(0, 10000)}
+      """
+
+    DATI AGGIUNTIVI:
+    - Elenco parziale di altre pagine del sito:
+      ${pageListForContext.substring(0, 3000)}
+    - Query da Google Search Console per questa pagina (prime 50):
+      ${gscDataForPage?.map(r => `"${r.keys[0]}" (Imp: ${r.impressions}, CTR: ${(r.ctr * 100).toFixed(2)}%)`).join('\n') || 'Nessun dato GSC disponibile.'}
+
+    PROCESSO DI ANALISI IN 3 FASI:
+
+    FASE 1: DETERMINA IL RUOLO STRATEGICO DELLA PAGINA
+    Basandoti sul titolo, contenuto e contesto di business, determina il ruolo di questa pagina. È una 'Core Section' (pagina transazionale, di servizio, che mira a convertire) o una 'Outer Section' (pagina informativa, di supporto, che mira a educare e costruire fiducia)? Riassumi questa valutazione in 'page_strategic_role_summary'.
+
+    FASE 2: CREA UN PIANO D'AZIONE ESECUTIVO
+    Basandoti sul ruolo determinato nella FASE 1, crea un piano d'azione.
+    - 'executive_summary': Un paragrafo che riassume la tua diagnosi strategica e le azioni più importanti.
+    - 'strategic_checklist': Una lista di 3-4 azioni concrete. Per ogni azione, fornisci un titolo, una descrizione dettagliata e una priorità ('Alta', 'Media', 'Bassa').
+      - SE È UNA PAGINA CORE: Concentrati su CRO (Ottimizzazione Conversioni), rafforzamento delle CTA, aggiunta di prove sociali e link da pagine Outer.
+      - SE È UNA PAGINA OUTER: Concentrati su completezza del contenuto, miglioramento dell'engagement e aggiunta di link strategici verso le pagine Core.
+      
+    FASE 3: GENERA SUGGERIMENTI DI LINK E CONTENUTI DETTAGLIATI
+    - 'inbound_links': Suggerisci 2-3 pagine ESISTENTI dal sito che dovrebbero linkare a QUESTA pagina. Fornisci un anchor text e una motivazione semantica/strategica. Usa i dati GSC se pertinenti.
+    - 'outbound_links': Suggerisci 2-3 link da QUESTA pagina verso altre pagine interne.
+    - 'content_enhancements': Suggerisci 2-3 miglioramenti specifici per il contenuto di QUESTA pagina (es. "Aggiungi una sezione FAQ", "Includi un video tutorial", "Approfondisci il concetto X").
+    - 'opportunity_queries': Elenca le 5 migliori query ad alte impressioni e basso CTR dai dati GSC, che rappresentano opportunità per ottimizzare il contenuto.
+  `;
+  const deepAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+      analyzed_url: { type: Type.STRING },
+      authority_score: { type: Type.NUMBER },
+      action_plan: {
+          type: Type.OBJECT,
+          properties: {
+              page_strategic_role_summary: { type: Type.STRING },
+              executive_summary: { type: Type.STRING },
+              strategic_checklist: {
+                  type: Type.ARRAY,
+                  items: {
+                      type: Type.OBJECT,
+                      properties: {
+                          title: { type: Type.STRING },
+                          description: { type: Type.STRING },
+                          priority: { type: Type.STRING }
+                      },
+                      required: ["title", "description", "priority"]
+                  }
+              }
+          },
+          required: ["page_strategic_role_summary", "executive_summary", "strategic_checklist"]
+      },
+      inbound_links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING }, driving_query: { type: Type.STRING } }, required: ["source_url", "proposed_anchor", "semantic_rationale"] } },
+      outbound_links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING } }, required: ["target_url", "proposed_anchor", "semantic_rationale"] } },
+      content_enhancements: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { suggestion_title: { type: Type.STRING }, description: { type: Type.STRING } }, required: ["suggestion_title", "description"] } },
+      opportunity_queries: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { query: { type: Type.STRING }, impressions: { type: Type.NUMBER }, ctr: { type: Type.NUMBER } }, required: ["query", "impressions", "ctr"] } }
+    },
+    required: ["analyzed_url", "authority_score", "action_plan", "inbound_links", "outbound_links", "content_enhancements", "opportunity_queries"]
+  };
+  
+  const analysisResult = await generateContentWithRetry(ai, {
+    model: "gemini-2.5-flash",
+    contents: deepAnalysisPrompt,
+    config: { responseMimeType: "application/json", responseSchema: deepAnalysisSchema, seed: 42 }
+  });
+  
+  if (!analysisResult.text) throw new Error("Agent 4 (Semantic SEO Coach) failed to produce a response.");
+  return JSON.parse(analysisResult.text.trim());
+}
+
+export async function progressAnalysisFlow(options: {
+  previousReport: Report;
+  newGscData: GscDataRow[];
+}): Promise<ProgressReport> {
+    const { previousReport, newGscData } = options;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+    const previousGscData = previousReport.gscData || [];
+    const previousDataMap = new Map<string, GscDataRow>();
+    previousGscData.forEach(row => {
+        const key = `${row.keys[0]}|${row.keys[1]}`;
+        previousDataMap.set(key, row);
+    });
+
+    const comparisonMetrics: ProgressMetric[] = [];
+    newGscData.forEach(newRow => {
+        const key = `${newRow.keys[0]}|${newRow.keys[1]}`;
+        const oldRow = previousDataMap.get(key);
+        if (oldRow && newRow.impressions > 50 && oldRow.impressions > 50) { // Consider only significant queries
+            const ctrChange = newRow.ctr - oldRow.ctr;
+            const positionChange = newRow.position - oldRow.position;
+            // Add only if there's a noticeable positive change
+            if (ctrChange > 0.005 || positionChange < -0.5) {
+                comparisonMetrics.push({
+                    page: newRow.keys[1],
+                    query: newRow.keys[0],
+                    initial_ctr: oldRow.ctr,
+                    current_ctr: newRow.ctr,
+                    initial_position: oldRow.position,
+                    current_position: newRow.position,
+                    ctr_change: ctrChange,
+                    position_change: positionChange,
+                });
+            }
+        }
+    });
+    
+    // Sort to find the most significant wins
+    comparisonMetrics.sort((a, b) => {
+        const scoreA = a.ctr_change * 100 - a.position_change;
+        const scoreB = b.ctr_change * 100 - b.position_change;
+        return scoreB - scoreA;
+    });
+
+    const keyWins = comparisonMetrics.slice(0, 10);
+    
+    const progressPrompt = `
+        Sei un Analista SEO. Analizza i seguenti dati di performance che confrontano due periodi.
+        Il tuo compito è scrivere un breve paragrafo ('ai_summary') che riassuma i progressi più significativi.
+        
+        SITO: ${previousReport.site}
+        PERIODO PRECEDENTE: ${previousReport.generated_at}
+        
+        VITTORIE PRINCIPALI (Miglioramenti in CTR e Posizione):
+        ${keyWins.map(w => `- Query "${w.query}" per la pagina ${w.page} ha migliorato il CTR di ${(w.ctr_change * 100).toFixed(2)} punti e la posizione di ${-w.position_change.toFixed(1)} posti.`).join('\n')}
+        
+        ISTRUZIONI:
+        - Sii incoraggiante e professionale.
+        - Menziona 2-3 esempi specifici tratti dalle "Vittorie Principali".
+        - Evidenzia se i miglioramenti sono concentrati su cluster tematici specifici, se possibile.
+        - Concludi con un consiglio strategico su come mantenere lo slancio.
+    `;
+    const progressSchema = {
+        type: Type.OBJECT,
+        properties: { ai_summary: { type: Type.STRING } },
+        required: ["ai_summary"]
+    };
+
+    const summaryResult = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: progressPrompt,
+        config: { responseMimeType: "application/json", responseSchema: progressSchema, seed: 42 }
+    });
+    
+    const ai_summary = summaryResult.text ? JSON.parse(summaryResult.text.trim()).ai_summary : "Analisi non disponibile.";
+
+    return {
+        site: previousReport.site,
+        previous_report_date: previousReport.generated_at,
+        current_report_date: new Date().toISOString(),
+        key_wins: keyWins,
+        ai_summary,
+    };
 }
 
 
@@ -623,74 +729,118 @@ export async function topicalAuthorityFlow(options: {
   strategicContext: StrategicContext;
   sendEvent: (event: object) => void;
 }): Promise<{ pillarRoadmaps: PillarRoadmap[]; bridgeSuggestions: BridgeArticleSuggestion[] }> {
-    const { site_root, thematic_clusters, page_diagnostics, strategicContext, sendEvent } = options;
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const { site_root, thematic_clusters, page_diagnostics, strategicContext, sendEvent } = options;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-    const onRetryCallback = (attempt: number, delay: number) => {
-        sendEvent({ type: 'progress', message: `API di Gemini temporaneamente non disponibile. Nuovo tentativo (${attempt}) tra ${Math.round(delay / 1000)}s...` });
-    };
-    
-    // --- AGENT 4.1: PILLAR DISCOVERY AGENT ---
-    sendEvent({ type: 'progress', message: "Agente di Scoperta: Sto analizzando il quadro generale del business..." });
-    let strategicPillarNames: string[] = [];
-    try {
-        const pillarDiscoveryPrompt = `
-            Agisci come un consulente di business e stratega SEO di livello mondiale per il sito "${site_root}".
-            
-            IL TUO COMPITO:
-            Identificare i 2-4 "Pillar" di business principali del sito. Un Pillar è una macro-categoria di servizi o argomenti fondamentale per il modello di business.
+  // --- AGENT 4.1: PILLAR DISCOVERY AGENT ---
+  sendEvent({ type: 'progress', message: "Agente 4.1: Il Consulente di Business sta identificando i Pillar strategici..." });
+  
+  const pillarDiscoveryPrompt = `
+    Sei un consulente di business e SEO strategist di altissimo livello. Il tuo compito è identificare i 2-5 "Pillar" tematici strategici per il sito ${site_root}, basandoti sugli obiettivi di business e sui contenuti esistenti.
 
-            DATI DISPONIBILI PER LA TUA ANALISI STRATEGICA:
-            1.  **Direttiva Primaria (Obiettivo di Business):**
-                -   Source Context: "${strategicContext.source_context}"
-                -   Central Intent: "${strategicContext.central_intent}"
+    INPUT STRATEGICI:
+    - Obiettivo del sito (Source Context): "${strategicContext.source_context}"
+    - Intento dell'utente target (Central Intent): "${strategicContext.central_intent}"
+    - Cluster tematici attuali: ${thematic_clusters.map(c => `"${c.cluster_name}"`).join(', ')}
+    - Titoli di tutte le pagine del sito: ${page_diagnostics.map(p => `"${p.title}"`).join(', ')}
 
-            2.  **Contesto Attuale (Contenuti Esistenti):**
-                -   Cluster Tematici Già Identificati: ${thematic_clusters.map(c => `"${c.cluster_name}"`).join(', ')}
-                -   Elenco Completo dei Titoli di Pagina: ${page_diagnostics.map(p => `"${p.title}"`).join(', ')}
+    PROCESSO DECISIONALE IN 4 PASSI:
+    1. PARTI DAL BUSINESS, NON DAI CONTENUTI: La tua decisione deve essere guidata principalmente dal "Source Context". Chiediti: "Quali 2-5 macro-categorie di servizi o argomenti deve coprire questo sito per raggiungere il suo obiettivo di business?".
+    2. USA I CONTENUTI PER VALIDARE, NON PER ESSERE LIMITATO: Analizza i titoli di pagina e i cluster esistenti per capire di cosa parla GIA' il sito. Usa queste informazioni per raffinare i nomi dei Pillar che hai identificato al punto 1, ma NON farti limitare da essi.
+    3. NON ESSERE INFLUENZATO DALLA QUANTITÀ: Anche se un argomento (es. "SEO") ha molti più contenuti di un altro (es. "Sviluppo Web"), se entrambi sono vitali per il business, devono essere considerati Pillar alla pari.
+    4. SII COMPLETO: Se noti che un Pillar è strategicamente necessario per il business ma è quasi assente nei contenuti (es. un'agenzia che non parla di "Pubblicità Online"), identificalo comunque. L'obiettivo è definire la struttura IDEALE.
 
-            ISTRUZIONI DETTAGLIATE:
-            1.  **PARTI DAL BUSINESS, NON DAI CONTENUTI:** La tua decisione deve essere guidata principalmente dal "Source Context". Chiediti: "Quali categorie di servizi dovrebbe offrire un'azienda con questo obiettivo?".
-            2.  **USA I CONTENUTI PER VALIDARE, NON PER ESSERE LIMITATO:** Usa i cluster e i titoli di pagina per capire di cosa parla *attualmente* il sito e per raffinare i nomi dei Pillar.
-            3.  **NON ESSERE INFLUENZATO DALLA QUANTITÀ:** Anche se un argomento (es. "SEO") ha molti più contenuti di un altro (es. "Realizzazione Siti Web"), se entrambi sono strategicamente vitali per il business, devono essere identificati come Pillar separati.
-            4.  **SII COMPLETO:** Se noti che un Pillar è strategicamente necessario per il business ma è quasi assente nei contenuti, **identificalo comunque**. Il tuo compito è definire la struttura ideale, non solo riflettere quella attuale.
-            5.  **FORNISCI UN ELENCO:** Restituisci solo un elenco di nomi di Pillar.
+    Il tuo unico output deve essere un array di stringhe JSON con i nomi dei Pillar.
+  `;
+  const pillarDiscoverySchema = {
+      type: Type.OBJECT,
+      properties: {
+          pillars: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+          }
+      },
+      required: ["pillars"]
+  };
+  const pillarResult = await generateContentWithRetry(ai, {
+    model: "gemini-2.5-flash",
+    contents: pillarDiscoveryPrompt,
+    config: { responseMimeType: "application/json", responseSchema: pillarDiscoverySchema, seed: 42 }
+  });
+  if (!pillarResult.text) throw new Error("Agent 4.1 (Pillar Discovery) failed to produce a response.");
+  const { pillars: discoveredPillars } = JSON.parse(pillarResult.text.trim()) as { pillars: string[] };
+  
+  sendEvent({ type: 'progress', message: `Pillar strategici identificati: ${discoveredPillars.join(', ')}` });
 
-            La tua risposta DEVE essere un oggetto JSON.
-        `;
-        const pillarDiscoverySchema = {
-            type: Type.OBJECT,
-            properties: {
-                strategic_pillars: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                }
-            },
-            required: ["strategic_pillars"]
-        };
+  // --- AGENT 4.2: CONTENT MAPPER AGENT ---
+  sendEvent({ type: 'progress', message: "Agente 4.2: Il Content Mapper sta analizzando le pagine esistenti..." });
+  const contentMapPrompt = `
+    Sei un Information Architect. Il tuo compito è mappare un elenco di pagine web ai Pillar tematici forniti.
 
-        const pillarResponse = await generateContentWithRetry(ai, {
-            model: "gemini-2.5-flash",
-            contents: pillarDiscoveryPrompt,
-            config: { responseMimeType: "application/json", responseSchema: pillarDiscoverySchema, seed: 42 },
-        }, 4, 1000, onRetryCallback);
+    PILLAR TEMATICI:
+    ${discoveredPillars.map(p => `- ${p}`).join('\n')}
 
-        const responseText = pillarResponse.text;
-        if (!responseText) throw new Error("Received empty response during pillar discovery.");
-        strategicPillarNames = JSON.parse(responseText.trim()).strategic_pillars;
+    ELENCO DI TUTTE LE PAGINE (URL):
+    ${page_diagnostics.map(p => p.url).join('\n')}
 
-        if (strategicPillarNames.length === 0) throw new Error("Pillar Discovery Agent did not identify any strategic pillars.");
+    ISTRUZIONI:
+    Per ogni Pillar, elenca gli URL delle pagine che appartengono a quel Pillar. Una pagina può appartenere a un solo Pillar. Sii il più accurato possibile.
+    L'output deve essere un oggetto JSON dove le chiavi sono i nomi dei Pillar e i valori sono array di URL.
+  `;
 
-        sendEvent({ type: 'progress', message: `Pillar strategici identificati: ${strategicPillarNames.join(', ')}` });
+  const contentMapSchema = {
+      type: Type.OBJECT,
+      properties: {},
+      additionalProperties: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+      }
+  };
+  
+  const mapResult = await generateContentWithRetry(ai, {
+    model: "gemini-2.5-flash",
+    contents: contentMapPrompt,
+    config: { responseMimeType: "application/json", responseSchema: contentMapSchema, seed: 42 }
+  });
+  if (!mapResult.text) throw new Error("Agent 4.2 (Content Mapper) failed to produce a response.");
+  const pageToPillarMap = JSON.parse(mapResult.text.trim()) as Record<string, string[]>;
 
-    } catch (e) {
-        const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-        throw new Error(`Agent 4.1 (Pillar Discovery) failed. Error: ${detailedError}`);
-    }
 
+  // --- AGENT 4.3: GAP ANALYSIS AGENT ---
+  const pillarPromises = discoveredPillars.map(async (pillar, index) => {
+    sendEvent({ type: 'progress', message: `Agente 4.3: Analisi dei gap per il Pillar "${pillar}" (${index + 1}/${discoveredPillars.length})...` });
 
-    // --- AGENT 4.2: TOPICAL AUTHORITY STRATEGIST (MULTI-PILLAR ANALYSIS) ---
-    const pillarRoadmaps: PillarRoadmap[] = [];
+    const existingPagesForPillar = pageToPillarMap[pillar] || [];
+
+    const gapAnalysisPrompt = `
+      Sei il massimo esperto mondiale sull'argomento "${pillar}", con una profonda conoscenza della metodologia SEO di Koray Gübür.
+      Il tuo compito è creare una roadmap di contenuti per colmare le lacune tematiche del sito ${site_root} per questo specifico Pillar.
+      
+      CONTESTO DI BUSINESS:
+      - Obiettivo (Source Context): "${strategicContext.source_context}"
+      - Intento Utente (Central Intent): "${strategicContext.central_intent}"
+
+      PAGINE CHE IL SITO HA GIA' SCRITTO PER QUESTO PILLAR:
+      ${existingPagesForPillar.length > 0 ? existingPagesForPillar.join('\n') : "Nessuna pagina esistente trovata per questo Pillar."}
+      
+      PROCESSO DI ANALISI IN 3 PASSI:
+      1. COSTRUISCI LA MAPPA IDEALE: Mentalmente, costruisci la mappa tematica ideale e completa per l'argomento "${pillar}". Pensa a tutti i sotto-argomenti, a cascata, che un vero esperto tratterebbe, dai concetti base a quelli più avanzati.
+      2. ESEGUI UN CONFRONTO CHIRURGICO: Sovrapponi la tua mappa ideale all'elenco di pagine che il sito ha già scritto.
+      3. IDENTIFICA I GAP REALI: Il tuo output deve includere SOLO ed ESCLUSIVAMENTE i cluster di contenuti e gli articoli che sono MANCANTI. NON SUGGERIRE MAI contenuti già trattati, anche parzialmente, dalle pagine esistenti.
+      
+      ISTRUZIONI PER L'OUTPUT:
+      - 'strategic_summary': Un paragrafo che riassume lo stato attuale del Pillar e la strategia per colmare i gap, allineandola al Contesto di Business.
+      - 'cluster_suggestions': Raggruppa gli articoli mancanti in 2-4 cluster tematici. Per ogni cluster:
+          - 'cluster_name': Un nome significativo.
+          - 'strategic_rationale': Spiega perché colmare questo gap è importante per il business.
+          - 'impact_score': Assegna un punteggio da 1 a 10 all'impatto del cluster (10 = impatto massimo).
+          - 'impact_rationale': Motiva il punteggio.
+          - 'article_suggestions': Per ogni articolo suggerito:
+              - 'title': Un titolo SEO-friendly.
+              - 'target_queries': 3-5 query di ricerca pertinenti.
+              - 'section_type': Classificalo come 'Core' (transazionale, vicino alla vendita) o 'Outer' (informativo, costruisce fiducia).
+    `;
+
     const gapAnalysisSchema = {
       type: Type.OBJECT,
       properties: {
@@ -702,8 +852,8 @@ export async function topicalAuthorityFlow(options: {
             properties: {
               cluster_name: { type: Type.STRING },
               strategic_rationale: { type: Type.STRING },
-              impact_score: { type: Type.NUMBER, description: "Punteggio di impatto strategico da 1 a 10." },
-              impact_rationale: { type: Type.STRING, description: "Spiegazione del punteggio di impatto." },
+              impact_score: { type: Type.NUMBER },
+              impact_rationale: { type: Type.STRING },
               article_suggestions: {
                 type: Type.ARRAY,
                 items: {
@@ -711,437 +861,93 @@ export async function topicalAuthorityFlow(options: {
                   properties: {
                     title: { type: Type.STRING },
                     target_queries: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    section_type: { type: Type.STRING, description: "'Core' o 'Outer'" },
+                    section_type: { type: Type.STRING }
                   },
                   required: ["title", "target_queries", "section_type"]
                 }
               }
             },
-            required: ["cluster_name", "strategic_rationale", "article_suggestions", "impact_score", "impact_rationale"]
+            required: ["cluster_name", "strategic_rationale", "impact_score", "impact_rationale", "article_suggestions"]
           }
         }
       },
       required: ["strategic_summary", "cluster_suggestions"]
     };
-
-    for (const pillarName of strategicPillarNames) {
-        sendEvent({ type: 'progress', message: `Analisi Gap per il Pillar: "${pillarName}"...` });
-        
-        const relevantClusters = thematic_clusters.filter(c => 
-            pillarName.toLowerCase().includes(c.cluster_name.toLowerCase()) || 
-            c.cluster_name.toLowerCase().includes(pillarName.toLowerCase())
-        );
-
-        const pillarPages = Array.from(new Set(relevantClusters.flatMap(c => c.pages)));
-
-
-        const gapAnalysisPrompt = `
-          Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority (metodologia Koray Gübür) per il sito "${site_root}".
-          
-          IL TUO COMPITO:
-          Eseguire un'analisi dei gap di contenuto per il Pillar: "${pillarName}", tenendo conto del contesto strategico del business.
-          
-          CONTESTO STRATEGICO:
-          - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
-          - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"
-
-          PAGINE ATTUALI DEL SITO PER QUESTO PILLAR:
-          ${pillarPages.length > 0 ? pillarPages.join('\n') : "Nessuna pagina specifica trovata."}
-
-          ISTRUZIONI DETTAGLIATE:
-          1.  **Costruisci la Mappa Ideale:** Basandoti sulla tua vasta conoscenza, costruisci una mappa tematica ideale e completa per "${pillarName}". Pensa a cascata: quali sono tutti i sotto-argomenti necessari per trattare questo Pillar in modo esaustivo?
-          2.  **Esegui l'Analisi dei Gap:** Confronta le pagine attuali con la mappa ideale per identificare i cluster e gli articoli mancanti.
-          3.  **Formula la Strategia e Classifica:**
-              -   Scrivi uno \`strategic_summary\` che riassuma lo stato attuale e l'importanza strategica di colmare i gap per questo Pillar.
-              -   Genera 2-3 \`cluster_suggestions\` mancanti.
-              -   Per ogni \`article_suggestion\`, **classificalo strategicamente** impostando \`section_type\`:
-                  -   \`'Core'\`: se l'articolo è direttamente collegato al Source Context (monetizzazione, servizi, prodotti).
-                  -   \`'Outer'\`: se l'articolo è di supporto, informativo e mira a costruire fiducia e dati storici.
-          4.  **Assegna un Punteggio di Impatto:**
-              -   Per ogni \`cluster_suggestion\`, assegna un \`impact_score\` numerico da 1 a 10.
-              -   Il punteggio deve riflettere l'impatto strategico del cluster. Dai punteggi più alti a cluster che:
-                  a) Sono strettamente allineati al Source Context ("${strategicContext.source_context}").
-                  b) Contengono una maggioranza di articoli 'Core' che portano alla monetizzazione.
-                  c) Colmano una lacuna fondamentale e ampia nella mappa tematica.
-              -   Fornisci anche un \`impact_rationale\`: una breve frase che spiega il perché del punteggio.
-
-          REGOLE FINALI:
-          - Sii profondo e strategico.
-          - La tua risposta DEVE essere un oggetto JSON valido in italiano che segua lo schema fornito.
-        `;
-
-        try {
-            const gapResponse = await generateContentWithRetry(ai, {
-                model: "gemini-2.5-flash",
-                contents: gapAnalysisPrompt,
-                config: { responseMimeType: "application/json", responseSchema: gapAnalysisSchema, seed: 42 },
-            }, 4, 1000, onRetryCallback);
-
-            const responseText = gapResponse.text;
-            if (responseText) {
-                const pillarData = JSON.parse(responseText.trim());
-                pillarRoadmaps.push({
-                    pillar_name: pillarName,
-                    ...pillarData
-                });
-            }
-        } catch(e) {
-            console.error(`Gap Analysis failed for pillar "${pillarName}"`, e);
-        }
+    
+    const result = await generateContentWithRetry(ai, {
+      model: "gemini-2.5-flash",
+      contents: gapAnalysisPrompt,
+      config: { responseMimeType: "application/json", responseSchema: gapAnalysisSchema, seed: 42 }
+    });
+    
+    if (!result.text) {
+        throw new Error(`Agent 4.3 (Gap Analysis) failed for pillar "${pillar}"`);
     }
     
-    // --- AGENT 4.3: CONTEXTUAL BRIDGE BUILDER ---
-    let bridgeSuggestions: BridgeArticleSuggestion[] = [];
-    if (strategicPillarNames.length > 1) {
-        sendEvent({ type: 'progress', message: "Architetto dei Ponti Contestuali: Sto cercando connessioni tra i Pillar..." });
-        
-        try {
-            const bridgeBuilderPrompt = `
-                Agisci come un "Architetto di Ponti Contestuali" per il sito "${site_root}".
-                
-                CONTESTO STRATEGICO:
-                -   Pillar di Business Identificati: ${strategicPillarNames.join(', ')}
-                -   Source Context (Obiettivo di Business): "${strategicContext.source_context}"
+    const analysisResult = JSON.parse(result.text.trim());
+    return {
+        pillar_name: pillar,
+        strategic_summary: analysisResult.strategic_summary,
+        cluster_suggestions: analysisResult.cluster_suggestions,
+        existing_pages: existingPagesForPillar
+    } as PillarRoadmap;
+  });
 
-                IL TUO COMPITO:
-                Identifica e suggerisci 1-2 articoli "ponte" ad alto valore strategico. Un articolo "ponte" è un contenuto che collega logicamente e semanticamente due Pillar diversi, unificando l'autorità del dominio e mostrando una competenza olistica.
+  const pillarRoadmaps = await Promise.all(pillarPromises);
 
-                ESEMPIO:
-                -   Pillars: "Consulenza SEO", "Realizzazione Siti Web"
-                -   Articolo Ponte Suggerito: "Come un Web Design Efficace Impatta Direttamente sulla SEO Tecnica e sul Posizionamento"
-
-                ISTRUZIONI:
-                -   Analizza le possibili sovrapposizioni tra i pillar forniti.
-                -   Suggerisci articoli che rispondano a intenti di ricerca complessi che si trovano all'intersezione di due pillar.
-                -   La tua risposta DEVE essere un oggetto JSON.
-            `;
-            const bridgeBuilderSchema = {
-                type: Type.OBJECT,
-                properties: {
-                    bridge_suggestions: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                title: { type: Type.STRING },
-                                description: { type: Type.STRING, description: "Spiega perché questo articolo è un buon ponte strategico." },
-                                connecting_pillars: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 2, maxItems: 2 },
-                                target_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
-                            },
-                            required: ["title", "description", "connecting_pillars", "target_queries"]
-                        }
-                    }
-                }
-            };
-
-            const bridgeResponse = await generateContentWithRetry(ai, {
-                model: "gemini-2.5-flash",
-                contents: bridgeBuilderPrompt,
-                config: { responseMimeType: "application/json", responseSchema: bridgeBuilderSchema, seed: 42 },
-            }, 4, 1000, onRetryCallback);
-
-            const responseText = bridgeResponse.text;
-            if (responseText) {
-                bridgeSuggestions = JSON.parse(responseText.trim()).bridge_suggestions;
-                sendEvent({ type: 'progress', message: `Trovati ${bridgeSuggestions.length} ponti contestuali.` });
-            }
-        } catch (e) {
-            console.error(`Contextual Bridge Builder failed`, e);
-            // Non bloccare il flusso se questo agente fallisce
-        }
-    }
-
-
-    if (pillarRoadmaps.length === 0) {
-        throw new Error("Impossibile generare la Topical Authority Roadmap per un motivo sconosciuto.");
-    }
+  // --- AGENT 4.4: BRIDGE BUILDER AGENT ---
+  sendEvent({ type: 'progress', message: "Agente 4.4: Il Costruttore di Ponti sta cercando connessioni tra i Pillar..." });
+  
+  const bridgePrompt = `
+    Sei un SEO Strategist olistico. Il tuo compito è identificare 1-3 opportunità per creare articoli "ponte" (Contextual Bridges) che colleghino semanticamente due Pillar diversi tra quelli elencati, unificando l'autorità del dominio.
     
-    sendEvent({ type: 'progress', message: `Analisi completata. Compilazione della roadmap finale.` });
-
-    return { pillarRoadmaps, bridgeSuggestions };
-}
-
-
-
-export async function deepAnalysisFlow(options: {
-  pageUrl: string;
-  pageDiagnostics: PageDiagnostic[];
-  gscData?: GscDataRow[];
-  strategicContext?: StrategicContext;
-  thematic_clusters?: ThematicCluster[];
-}): Promise<DeepAnalysisReport> {
-  console.log(`Deep Analysis Agent started for ${options.pageUrl}`);
-
-  const { pageUrl, pageDiagnostics, gscData, strategicContext, thematic_clusters } = options;
-
-  const analyzedPageDiagnostic = pageDiagnostics.find(p => p.url === pageUrl);
-  if (!analyzedPageDiagnostic) {
-    throw new Error(`Could not find page diagnostics for ${pageUrl}`);
-  }
-
-  const pageContent = await wp.getPageContent(pageUrl);
-  if (!pageContent) {
-    throw new Error(`Could not retrieve content for page: ${pageUrl}`);
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-
-  const hasGscData = gscData && gscData.length > 0;
-  const gscDataString = hasGscData 
-    ? `Dati di Google Search Console (GSC):
-      ${gscData?.map(row => `'${row.keys[0]}', '${row.keys[1]}', ${row.impressions}, ${row.ctr}`).join('\n')}`
-    : "Non sono stati forniti dati da Google Search Console.";
-
-  const strategicContextString = strategicContext ? `CONTESTO STRATEGICO GENERALE DEL SITO:
-    - Source Context (Obiettivo di Business): "${strategicContext.source_context}"
-    - Central Search Intent (Intento Utente Principale): "${strategicContext.central_intent}"`
-    : "Nessun contesto di business generale fornito.";
+    PILLAR DEL SITO:
+    ${discoveredPillars.map(p => `- ${p}`).join('\n')}
     
-  const clustersString = thematic_clusters ? `CLUSTER TEMATICI DEL SITO:
-    ${thematic_clusters.map(c => `- ${c.cluster_name}: ${c.pages.join(', ')}`).join('\n')}`
-    : "Nessuna informazione sui cluster tematici fornita.";
+    CONTESTO DI BUSINESS:
+    - Obiettivo: "${strategicContext.source_context}"
+    - Intento Utente: "${strategicContext.central_intent}"
 
-  const deepAnalysisPrompt = `
-    Agisci come un "Semantic SEO Coach" di livello mondiale, esperto della metodologia Holistic SEO di Koray Gübür. Il tuo compito è analizzare in profondità una singola pagina e generare un **Piano d'Azione Strategico** chiaro e contestualizzato.
-
-    PAGINA DA ANALIZZARE: ${pageUrl}
-    Punteggio di Autorità Interna: ${analyzedPageDiagnostic.internal_authority_score.toFixed(2)}/10
-
-    ${strategicContextString}
-
-    DATI DISPONIBILI:
-    1.  Contenuto della pagina (primi 8000 caratteri):
-        ---
-        ${pageContent.substring(0, 8000)} 
-        ---
-    2.  Mappa del sito con punteggi di autorità e cluster tematici:
-        ${clustersString}
-        ${pageDiagnostics.filter(p => p.url !== pageUrl).map(p => `[Score: ${p.internal_authority_score.toFixed(1)}] ${p.url}`).join('\n')}
-    3.  ${gscDataString}
-
-    IL TUO COMPITO IN 3 FASI:
-    **FASE 1: DETERMINA IL RUOLO STRATEGICO DELLA PAGINA.**
-    Basandoti sul Contesto Strategico e sui Cluster, determina il ruolo di questa pagina. È una pagina 'Core' (transazionale, legata al business) o 'Outer' (informativa, di supporto)? A quale Pillar/Cluster appartiene? Inizia la tua analisi con un \`page_strategic_role_summary\`.
-
-    **FASE 2: GENERA UN PIANO D'AZIONE CONTESTUALIZZATO.**
-    Crea un \`action_plan\` basato sul ruolo determinato.
-    -   **Se è una pagina 'Core'**: i tuoi suggerimenti devono focalizzarsi su Ottimizzazione del Tasso di Conversione (CRO), rafforzamento delle Call-to-Action (CTA), chiarezza dell'offerta e attrazione di link da pagine 'Outer' pertinenti.
-    -   **Se è una pagina 'Outer'**: i tuoi suggerimenti devono focalizzarsi su aumentare la completezza e la profondità del contenuto, migliorare l'engagement dell'utente, rispondere a più domande e inserire link strategici in uscita verso le pagine 'Core' rilevanti.
-    Il piano deve includere un \`executive_summary\` e una \`strategic_checklist\` di 3-5 azioni concrete e prioritarie.
-
-    **FASE 3: FORNISCI DATI DI SUPPORTO.**
-    Popola le sezioni \`opportunity_queries\`, \`inbound_links\`, \`outbound_links\`, e \`content_enhancements\` con suggerimenti che supportino direttamente il piano d'azione che hai definito. Ogni suggerimento deve essere strategico e contestualizzato al ruolo della pagina.
-
-    REGOLE CRITICHE:
-    - La risposta DEVE essere un oggetto JSON valido in lingua italiana.
-    - Tutti gli URL suggeriti DEVONO provenire dall'elenco di pagine del sito.
-    - Il piano d'azione deve essere il punto focale e la sua strategia deve dipendere dal ruolo (Core/Outer) che hai identificato.
+    ISTRUZIONI:
+    1.  Identifica le coppie di Pillar più sinergiche.
+    2.  Per ogni coppia, suggerisci un titolo di articolo che crei un ponte logico tra i due.
+    3.  Scrivi una breve descrizione che spieghi perché questo articolo è un buon ponte strategico.
+    4.  Fornisci alcune query target pertinenti.
+    5.  Assicurati che i suggerimenti siano allineati al Contesto di Business.
   `;
-
-  const deepAnalysisSchema = {
+  const bridgeSchema = {
     type: Type.OBJECT,
     properties: {
-        action_plan: {
+      bridge_suggestions: {
+        type: Type.ARRAY,
+        items: {
           type: Type.OBJECT,
           properties: {
-            page_strategic_role_summary: { type: Type.STRING, description: "Riepilogo del ruolo strategico della pagina (es. 'Questa è una pagina Outer nel pillar Consulenza SEO...')." },
-            executive_summary: { type: Type.STRING, description: "Riepilogo strategico della situazione e degli obiettivi." },
-            strategic_checklist: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING, description: "Titolo dell'azione." },
-                  description: { type: Type.STRING, description: "Descrizione dettagliata dell'azione da compiere." },
-                  priority: { type: Type.STRING, description: "Priorità: 'Alta', 'Media', o 'Bassa'." }
-                },
-                required: ["title", "description", "priority"]
-              }
-            }
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            connecting_pillars: { type: Type.ARRAY, items: { type: Type.STRING } },
+            target_queries: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
-          required: ["page_strategic_role_summary", "executive_summary", "strategic_checklist"]
-        },
-        opportunity_queries: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: { query: { type: Type.STRING }, impressions: { type: Type.NUMBER }, ctr: { type: Type.NUMBER } },
-             required: ["query", "impressions", "ctr"]
-          }
-        },
-        inbound_links: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { 
-                  source_url: { type: Type.STRING }, 
-                  proposed_anchor: { type: Type.STRING }, 
-                  semantic_rationale: { type: Type.STRING },
-                  driving_query: { type: Type.STRING },
-                },
-                required: ["source_url", "proposed_anchor", "semantic_rationale"]
-            }
-        },
-        outbound_links: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { target_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING } },
-                required: ["target_url", "proposed_anchor", "semantic_rationale"]
-            }
-        },
-        content_enhancements: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { suggestion_title: { type: Type.STRING }, description: { type: Type.STRING } },
-                required: ["suggestion_title", "description"]
-            }
+          required: ["title", "description", "connecting_pillars", "target_queries"]
         }
-    },
-    required: ["action_plan", "inbound_links", "outbound_links", "content_enhancements"]
-  };
-
-  try {
-    const response = await generateContentWithRetry(ai, {
-        model: "gemini-2.5-flash",
-        contents: deepAnalysisPrompt,
-        config: { responseMimeType: "application/json", responseSchema: deepAnalysisSchema, seed: 42, },
-    });
-
-    const responseText = response.text;
-    if (!responseText) throw new Error("Received empty response from Gemini during deep analysis.");
-    
-    const report = JSON.parse(responseText.trim());
-    report.analyzed_url = pageUrl;
-    report.authority_score = analyzedPageDiagnostic.internal_authority_score;
-    
-    console.log(`Deep Analysis Agent for ${pageUrl} complete.`);
-    return report;
-
-  } catch (e) {
-    console.error(`Error during deep analysis for ${pageUrl}:`, e);
-    const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-    throw new Error(`Failed to generate deep analysis report. Error: ${detailedError}`);
-  }
-}
-
-export async function progressAnalysisFlow(options: {
-  previousReport: Report;
-  newGscData: GscDataRow[];
-}): Promise<ProgressReport> {
-  console.log("Progress Analysis Agent started for site:", options.previousReport.site);
-  const { site, gscData: oldGscData, generated_at } = options.previousReport;
-
-  if (!oldGscData) {
-    throw new Error("Il report precedente non contiene dati GSC, impossibile fare un confronto.");
-  }
-  
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-
-  const oldDataMap = new Map<string, GscDataRow>();
-  for (const row of oldGscData) {
-    const key = `${row.keys[1]}|${row.keys[0]}`; // page|query
-    oldDataMap.set(key, row);
-  }
-
-  const comparisonData: ProgressMetric[] = [];
-  for (const newRow of options.newGscData) {
-      const key = `${newRow.keys[1]}|${newRow.keys[0]}`;
-      const oldRow = oldDataMap.get(key);
-      if (oldRow) {
-          const ctrChange = newRow.ctr - oldRow.ctr;
-          const positionChange = newRow.position - oldRow.position; // Negative is good
-          if (Math.abs(ctrChange) > 0.001 || Math.abs(positionChange) > 0.5) {
-              comparisonData.push({
-                  page: newRow.keys[1],
-                  query: newRow.keys[0],
-                  initial_ctr: oldRow.ctr,
-                  current_ctr: newRow.ctr,
-                  initial_position: oldRow.position,
-                  current_position: newRow.position,
-                  ctr_change: ctrChange,
-                  position_change: positionChange,
-              });
-          }
       }
-  }
-
-  comparisonData.sort((a, b) => b.ctr_change - a.ctr_change);
-  const topImprovements = comparisonData.slice(0, 50);
-
-  const progressPrompt = `
-    Agisci come un analista SEO esperto. Il tuo compito è analizzare l'evoluzione delle performance di un sito confrontando i dati di Google Search Console (GSC) di due periodi diversi.
-
-    CONTESTO:
-    - Sito analizzato: ${site}
-    - Data del report precedente: ${new Date(generated_at).toLocaleDateString('it-IT')}
-    - L'utente ha applicato dei suggerimenti di link interni basati sul report precedente.
-
-    DATI DI CONFRONTO (le metriche più significative):
-    Formato: Pagina, Query, CTR Iniziale, CTR Attuale, Posizione Iniziale, Posizione Attuale
-    ${topImprovements.map(d => `"${d.page}", "${d.query}", ${(d.initial_ctr * 100).toFixed(2)}%, ${(d.current_ctr * 100).toFixed(2)}%, ${d.initial_position.toFixed(1)}, ${d.current_position.toFixed(1)}`).join('\n')}
-
-    IL TUO COMPITO:
-    1.  Identifica le 3-5 "Vittorie Principali" (key_wins), cioè le combinazioni pagina/query che hanno mostrato i miglioramenti più significativi e strategici (es. grande aumento di CTR, miglioramento notevole di posizione per query importanti).
-    2.  Scrivi un breve riassunto (ai_summary) che commenti i risultati. Sii incoraggiante e strategico. Evidenzia se le strategie di linking sembrano aver funzionato e suggerisci i prossimi passi (es. "L'aumento del CTR per 'query x' sulla pagina Y dimostra che rafforzare quel cluster è stata una mossa vincente. Ora potremmo concentrarci su...").
-
-    REGOLE:
-    - Fornisci l'output in formato JSON e in lingua italiana.
-    - Sii conciso e focalizzati sull'impatto.
-  `;
-  
-  const progressSchema = {
-      type: Type.OBJECT,
-      properties: {
-          key_wins: {
-              type: Type.ARRAY,
-              items: {
-                  type: Type.OBJECT,
-                  properties: {
-                      page: { type: Type.STRING },
-                      query: { type: Type.STRING },
-                      initial_ctr: { type: Type.NUMBER },
-                      current_ctr: { type: Type.NUMBER },
-                      initial_position: { type: Type.NUMBER },
-                      current_position: { type: Type.NUMBER },
-                      ctr_change: { type: Type.NUMBER },
-                      position_change: { type: Type.NUMBER },
-                  },
-                   required: ["page", "query", "initial_ctr", "current_ctr", "initial_position", "current_position", "ctr_change", "position_change"]
-              },
-          },
-          ai_summary: { type: Type.STRING },
-      },
-      required: ["key_wins", "ai_summary"]
+    },
+    required: ["bridge_suggestions"]
   };
-
+  
+  let bridgeSuggestions: BridgeArticleSuggestion[] = [];
   try {
-      const response = await generateContentWithRetry(ai, {
+      const bridgeResult = await generateContentWithRetry(ai, {
         model: "gemini-2.5-flash",
-        contents: progressPrompt,
-        config: { responseMimeType: "application/json", responseSchema: progressSchema, seed: 42, },
+        contents: bridgePrompt,
+        config: { responseMimeType: "application/json", responseSchema: bridgeSchema, seed: 42 }
       });
-      
-      const responseText = response.text;
-      if (!responseText) throw new Error("Received empty response during progress analysis.");
-      
-      const parsedResponse = JSON.parse(responseText.trim());
-      
-      const finalProgressReport: ProgressReport = {
-          site,
-          previous_report_date: generated_at,
-          current_report_date: new Date().toISOString(),
-          key_wins: parsedResponse.key_wins,
-          ai_summary: parsedResponse.ai_summary,
-      };
-      
-      console.log("Progress Analysis Agent complete.");
-      return finalProgressReport;
-
+      if(bridgeResult.text) {
+        bridgeSuggestions = JSON.parse(bridgeResult.text.trim()).bridge_suggestions;
+      }
   } catch (e) {
-      console.error("Error during progress analysis flow:", e);
-      const detailedError = e instanceof Error ? e.message : JSON.stringify(e);
-      throw new Error(`Agent (Progress Analyst) failed. Error: ${detailedError}`);
+      console.warn("Agent 4.4 (Bridge Builder) failed to generate suggestions. Skipping.", e);
   }
+
+  return { pillarRoadmaps, bridgeSuggestions };
 }
