@@ -701,7 +701,7 @@ export async function topicalAuthorityFlow(options: {
             c.cluster_name.toLowerCase().includes(pillar.toLowerCase()) || 
             pillar.toLowerCase().includes(c.cluster_name.toLowerCase())
         );
-        const pillarPages = [...new Set(relevantClusters.flatMap(c => c.pages))];
+        const pillarPages = Array.from(new Set(relevantClusters.flatMap(c => c.pages)));
 
         const gapAnalysisPrompt = `
           Agisci come un SEO strategist di fama mondiale, specializzato in Topical Authority (metodologia Koray Gübür) per il sito "${site_root}".
