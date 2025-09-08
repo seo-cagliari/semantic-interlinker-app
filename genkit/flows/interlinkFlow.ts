@@ -585,11 +585,13 @@ export async function deepAnalysisFlow(options: {
     - 'strategic_checklist': Una lista di 3-4 azioni concrete (es. Ottimizzazione CRO, Arricchimento Contenuto, Rafforzamento Autorità), con priorità.
       
     FASE 3: GENERA SUGGERIMENTI DI LINKING BASATI SULL'AUTORITÀ
-    - 'inbound_links': Suggerisci 2-3 link in entrata verso la TARGET PAGE.
-        - REGOLA #1 (FONDAMENTALE): Le pagine sorgente DEVONO avere un punteggio di autorità INTERNA PIÙ ALTO della TARGET PAGE. Identificale dalla mappa delle pagine fornita.
-        - REGOLA #2: I link devono essere semanticamente e strategicamente coerenti. Un link da una 'Outer Section' autorevole a una 'Core Section' è di altissimo valore.
-        - REGOLA #3: L'anchor text proposto deve essere guidato dalle 'Opportunity Queries' di GSC (alte impressioni, basso CTR).
-        - Per ogni suggerimento, includi 'source_authority_score'. La 'semantic_rationale' DEVE spiegare PERCHÉ quel link è strategicamente valido in termini di flusso di autorità.
+    - 'inbound_links': Suggerisci 3-5 link in entrata di ALTO VALORE verso la TARGET PAGE.
+        - REGOLA #1 (FLUSSO DI AUTORITÀ): Le pagine sorgente DEVONO avere un punteggio di autorità INTERNA PIÙ ALTO della TARGET PAGE. Identificale dalla mappa delle pagine fornita. Cerca le pagine più forti del sito.
+        - REGOLA #2 (RILEVANZA STRATEGICA): I link devono essere semanticamente e strategicamente coerenti. Usa i cluster tematici forniti per guidare le tue decisioni.
+        - REGOLA #3 (LINKING CROSS-CLUSTER): Un link da una pagina autorevole in un cluster tematico semanticamente ADIACENTE (es. da "Web Marketing" a "Realizzazione Siti Web") è estremamente prezioso. Cerca attivamente queste opportunità per creare ponti tematici.
+        - REGOLA #4 (INTENTO): Privilegia link da pagine informative ('Outer Section') a pagine transazionali ('Core Section').
+        - REGOLA #5 (ANCHOR TEXT): L'anchor text proposto deve essere guidato dalle 'Opportunity Queries' di GSC (alte impressioni, basso CTR).
+        - La 'semantic_rationale' DEVE spiegare PERCHÉ il link è strategicamente valido, menzionando il flusso di autorità e la coerenza tematica (intra-cluster o cross-cluster).
     - 'outbound_links': Suggerisci 2-3 link in uscita dalla TARGET PAGE verso altre pagine interne che supportino il percorso dell'utente o rafforzino un altro cluster.
 
     FASE 4: IDENTIFICA OPPORTUNITÀ DI CONTENUTO
@@ -658,7 +660,7 @@ export async function contentGenerationFlow(options: {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     const generationPrompt = `
-        Sei un "Copywriter SEO Semantico", un esperto nella creazione di contenuti naturali, persuasivi e ottimizzati per i motori di ricerca.
+        Sei un "Copywriter SEO Semantico", un esperto nella creazione di contenuti naturali, persuasivi e ottimizzati per i motori di ricerca, pronti per essere incollati in WordPress.
         
         IL TUO COMPITO:
         Scrivere una nuova sezione di testo per una pagina web esistente, basandoti su un'istruzione specifica.
@@ -673,12 +675,18 @@ export async function contentGenerationFlow(options: {
           ${page_content.substring(0, 5000)} 
           """
 
-        REGOLE DI SCRITTURA:
-        1.  STILE: Scrivi in modo umano, chiaro e coinvolgente. Evita il keyword stuffing.
-        2.  LUNGHEZZA: Il testo generato deve essere di circa 150-250 parole.
-        3.  OTTIMIZZAZIONE: Integra le "Query di Opportunità" e i loro concetti correlati nel testo in modo fluido e logico, senza forzature.
-        4.  FORMATTAZIONE: Restituisci il testo in formato HTML pulito, usando tag come <p>, <strong>, <ul>, e <li> per una buona leggibilità. Non includere tag <html> o <body>.
-        5.  FOCUS: Concentrati esclusivamente sulla creazione del nuovo contenuto richiesto dall'istruzione. Non riassumere o commentare il contenuto esistente.
+        REGOLE FONDAMENTALI DI SCRITTURA E FORMATTAZIONE:
+        1.  TITOLO OBBLIGATORIO: Il tuo output DEVE iniziare con un tag <h3> pertinente e SEO-friendly che riassuma l'argomento della sezione. L'ispirazione per il titolo deve venire dall' "ISTRUZIONE DI CONTENUTO".
+        2.  STILE: Scrivi in modo umano, chiaro e coinvolgente. Evita il keyword stuffing.
+        3.  LUNGHEZZA: Il testo generato (escluso il titolo) deve essere di circa 150-250 parole.
+        4.  OTTIMIZZAZIONE: Integra le "Query di Opportunità" e i loro concetti correlati nel testo in modo fluido e logico, senza forzature.
+        5.  FORMATTAZIONE HTML: Restituisci il testo in formato HTML pulito, pronto da copiare. Usa paragrafi (<p>), grassetto (<strong>) e, se appropriato, liste (<ul>, <li>) per una leggibilità ottimale. Non includere tag <html> o <body>.
+        6.  FOCUS: Concentrati esclusivamente sulla creazione del nuovo contenuto richiesto. Non riassumere o commentare il contenuto esistente.
+        
+        ESEMPIO DI OUTPUT CORRETTO:
+        <h3>Titolo SEO-Friendly per la Sezione</h3>
+        <p>Questo è il primo paragrafo del contenuto, scritto in modo naturale e che integra una delle <strong>query di opportunità</strong> in modo logico.</p>
+        <p>Questo è un secondo paragrafo che approfondisce l'argomento, mantenendo un tono professionale e utile per l'utente.</p>
     `;
     const generationSchema = {
         type: Type.OBJECT,
