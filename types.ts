@@ -156,6 +156,7 @@ export type StrategicActionPlan = {
 
 export type InboundLinkSuggestion = {
   source_url: string;
+  source_authority_score: number;
   proposed_anchor: string;
   semantic_rationale: string;
   driving_query?: string; // Query GSC che ha motivato il suggerimento

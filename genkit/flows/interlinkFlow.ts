@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, PillarRoadmap, ContentBrief, SerpAnalysisResult, StrategicContext, BridgeArticleSuggestion } from '../../types';
+import { Report, ThematicCluster, ContentGapSuggestion, DeepAnalysisReport, PageDiagnostic, GscDataRow, Suggestion, ProgressReport, ProgressMetric, OpportunityPage, StrategicActionPlan, Ga4DataRow, PillarRoadmap, ContentBrief, SerpAnalysisResult, StrategicContext, BridgeArticleSuggestion, InboundLinkSuggestion } from '../../types';
 import { wp } from '../tools/wp';
 import { seozoom } from '../tools/seozoom';
 import { serpAnalyzer } from '../tools/serp';
@@ -544,54 +544,57 @@ export async function deepAnalysisFlow(options: {
   const pageContent = await wp.getPageContent(pageUrl);
   const pageInfo = pageDiagnostics.find(p => p.url === pageUrl);
   
-  const pageListForContext = pageDiagnostics.map(p => `- ${p.title} (${p.url})`).join('\n');
+  const pageListForContext = pageDiagnostics.map(p => `- "${p.title}" (URL: ${p.url}, Autorità: ${p.internal_authority_score.toFixed(1)}/10)`).join('\n');
   const gscDataForPage = gscData?.filter(row => row.keys[1] === pageUrl).slice(0, 50);
   const opportunityQueries = gscDataForPage?.filter(q => q.impressions > 50 && q.ctr < 0.03) || [];
   
   const strategicContextPromptPart = (strategicContext && thematic_clusters)
     ? `CONTESTO STRATEGICO FONDAMENTALE:
       - Obiettivo del sito (Source Context): "${strategicContext.source_context}"
-      - Cluster tematici del sito: ${thematic_clusters.map(c => c.cluster_name).join(', ')}
-      - Questa analisi deve essere allineata a questi obiettivi.`
+      - Cluster tematici del sito: ${thematic_clusters.map(c => `"${c.cluster_name}"`).join(', ')}`
     : "Nessun contesto strategico fornito. Esegui un'analisi SEO generica.";
 
   const deepAnalysisPrompt = `
-    Sei un "Semantic SEO Coach", un'intelligenza artificiale esperta in SEO olistica (metodologia Koray Gübür), content strategy e analisi dei dati.
-    Il tuo compito è eseguire un'analisi approfondita di una singola pagina web e fornire un piano d'azione strategico.
+    Sei un "Agente SEO Olistico Avanzato", un'IA che applica le metodologie strategiche di Koray Tuğberk Gübür.
+    La tua missione è eseguire un'analisi chirurgica di una pagina web per massimizzarne l'impatto sul business, concentrandoti sul FLUSSO DI AUTORITÀ e sulla GERARCHIA TOPICA.
     
     ${strategicContextPromptPart}
 
-    PAGINA DA ANALIZZARE:
+    PAGINA DA ANALIZZARE (LA TARGET PAGE):
     - URL: ${pageUrl}
     - Titolo: "${pageInfo?.title}"
     - Punteggio di Autorità Interna: ${pageInfo?.internal_authority_score.toFixed(2)}/10
-    - Contenuto (testo pulito): """
-      ${pageContent.substring(0, 10000)}
+    - Contenuto (estratto): """
+      ${pageContent.substring(0, 8000)}
       """
 
-    DATI AGGIUNTIVI:
-    - Elenco parziale di altre pagine del sito:
-      ${pageListForContext.substring(0, 3000)}
-    - Query da Google Search Console per questa pagina (prime 50):
+    DATI DI CONTESTO DELL'INTERO SITO:
+    - Mappa di Tutte le Pagine del Sito con la loro Autorità:
+      ${pageListForContext}
+    - Query da Google Search Console per la TARGET PAGE (prime 50):
       ${gscDataForPage?.map(r => `"${r.keys[0]}" (Imp: ${r.impressions}, CTR: ${(r.ctr * 100).toFixed(2)}%)`).join('\n') || 'Nessun dato GSC disponibile.'}
 
-    PROCESSO DI ANALISI IN 3 FASI:
+    PROCESSO DI ANALISI STRATEGICA IN 4 FASI:
 
-    FASE 1: DETERMINA IL RUOLO STRATEGICO DELLA PAGINA
-    Basandoti sul titolo, contenuto e contesto di business, determina il ruolo di questa pagina. È una 'Core Section' (pagina transazionale, di servizio, che mira a convertire) o una 'Outer Section' (pagina informativa, di supporto, che mira a educare e costruire fiducia)? Riassumi questa valutazione in 'page_strategic_role_summary'.
+    FASE 1: DETERMINA IL RUOLO STRATEGICO
+    Basandoti su tutto il contesto, determina il ruolo della TARGET PAGE. È una 'Core Section' (transazionale, servizio, prodotto) o una 'Outer Section' (informativa, blog, supporto)? Riassumi questa valutazione in 'page_strategic_role_summary'.
 
     FASE 2: CREA UN PIANO D'AZIONE ESECUTIVO
-    Basandoti sul ruolo determinato nella FASE 1, crea un piano d'azione.
-    - 'executive_summary': Un paragrafo che riassume la tua diagnosi strategica e le azioni più importanti.
-    - 'strategic_checklist': Una lista di 3-4 azioni concrete. Per ogni azione, fornisci un titolo, una descrizione dettagliata e una priorità ('Alta', 'Media', 'Bassa').
-      - SE È UNA PAGINA CORE: Concentrati su CRO (Ottimizzazione Conversioni), rafforzamento delle CTA, aggiunta di prove sociali e link da pagine Outer.
-      - SE È UNA PAGINA OUTER: Concentrati su completezza del contenuto, miglioramento dell'engagement e aggiunta di link strategici verso le pagine Core.
+    Crea un piano d'azione ('action_plan') basato sul ruolo.
+    - 'executive_summary': Un paragrafo che riassume la diagnosi e le azioni più critiche per allineare la pagina al suo ruolo strategico e ai dati GSC.
+    - 'strategic_checklist': Una lista di 3-4 azioni concrete (es. Ottimizzazione CRO, Arricchimento Contenuto, Rafforzamento Autorità), con priorità.
       
-    FASE 3: GENERA SUGGERIMENTI DI LINK E CONTENUTI DETTAGLIATI
-    - 'inbound_links': Suggerisci 2-3 pagine ESISTENTI dal sito che dovrebbero linkare a QUESTA pagina. Fornisci un anchor text e una motivazione semantica/strategica. Usa i dati GSC se pertinenti.
-    - 'outbound_links': Suggerisci 2-3 link da QUESTA pagina verso altre pagine interne.
-    - 'content_enhancements': Suggerisci 2-3 miglioramenti specifici per il contenuto di QUESTA pagina (es. "Aggiungi una sezione FAQ", "Includi un video tutorial", "Approfondisci il concetto X").
-    - 'opportunity_queries': Elenca le 5 migliori query ad alte impressioni e basso CTR dai dati GSC, che rappresentano opportunità per ottimizzare il contenuto.
+    FASE 3: GENERA SUGGERIMENTI DI LINKING BASATI SULL'AUTORITÀ
+    - 'inbound_links': Suggerisci 2-3 link in entrata verso la TARGET PAGE.
+        - REGOLA #1 (FONDAMENTALE): Le pagine sorgente DEVONO avere un punteggio di autorità INTERNA PIÙ ALTO della TARGET PAGE. Identificale dalla mappa delle pagine fornita.
+        - REGOLA #2: I link devono essere semanticamente e strategicamente coerenti. Un link da una 'Outer Section' autorevole a una 'Core Section' è di altissimo valore.
+        - REGOLA #3: L'anchor text proposto deve essere guidato dalle 'Opportunity Queries' di GSC (alte impressioni, basso CTR).
+        - Per ogni suggerimento, includi 'source_authority_score'. La 'semantic_rationale' DEVE spiegare PERCHÉ quel link è strategicamente valido in termini di flusso di autorità.
+    - 'outbound_links': Suggerisci 2-3 link in uscita dalla TARGET PAGE verso altre pagine interne che supportino il percorso dell'utente o rafforzino un altro cluster.
+
+    FASE 4: IDENTIFICA OPPORTUNITÀ DI CONTENUTO
+    - 'content_enhancements': Suggerisci 2-3 miglioramenti specifici per il contenuto della TARGET PAGE, mirati a catturare le 'Opportunity Queries' identificate in GSC. Questi suggerimenti saranno usati da un altro AI per generare il testo, quindi sii specifico (es. "Aggiungi una sezione che confronta X e Y", "Crea una checklist scaricabile su Z").
+    - 'opportunity_queries': Elenca le 5 migliori query con alte impressioni e basso CTR dai dati GSC.
   `;
   const deepAnalysisSchema = {
     type: Type.OBJECT,
@@ -618,7 +621,7 @@ export async function deepAnalysisFlow(options: {
           },
           required: ["page_strategic_role_summary", "executive_summary", "strategic_checklist"]
       },
-      inbound_links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING }, driving_query: { type: Type.STRING } }, required: ["source_url", "proposed_anchor", "semantic_rationale"] } },
+      inbound_links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source_url: { type: Type.STRING }, source_authority_score: { type: Type.NUMBER }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING }, driving_query: { type: Type.STRING } }, required: ["source_url", "source_authority_score", "proposed_anchor", "semantic_rationale"] } },
       outbound_links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { target_url: { type: Type.STRING }, proposed_anchor: { type: Type.STRING }, semantic_rationale: { type: Type.STRING } }, required: ["target_url", "proposed_anchor", "semantic_rationale"] } },
       content_enhancements: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { suggestion_title: { type: Type.STRING }, description: { type: Type.STRING } }, required: ["suggestion_title", "description"] } },
       opportunity_queries: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { query: { type: Type.STRING }, impressions: { type: Type.NUMBER }, ctr: { type: Type.NUMBER } }, required: ["query", "impressions", "ctr"] } }
@@ -633,8 +636,71 @@ export async function deepAnalysisFlow(options: {
   });
   
   if (!analysisResult.text) throw new Error("Agent 4 (Semantic SEO Coach) failed to produce a response.");
-  return JSON.parse(analysisResult.text.trim());
+  const report = JSON.parse(analysisResult.text.trim()) as DeepAnalysisReport;
+
+  // Post-processing to add scores to the report if missing (failsafe)
+  report.inbound_links.forEach(link => {
+      if (!link.source_authority_score) {
+          const sourcePage = pageDiagnostics.find(p => p.url === link.source_url);
+          link.source_authority_score = sourcePage?.internal_authority_score || 0;
+      }
+  });
+
+  return report;
 }
+
+export async function contentGenerationFlow(options: {
+  enhancement_title: string;
+  page_content: string;
+  opportunity_queries: { query: string; impressions: number; ctr: number }[];
+}): Promise<{ generated_html: string }> {
+    const { enhancement_title, page_content, opportunity_queries } = options;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
+    const generationPrompt = `
+        Sei un "Copywriter SEO Semantico", un esperto nella creazione di contenuti naturali, persuasivi e ottimizzati per i motori di ricerca.
+        
+        IL TUO COMPITO:
+        Scrivere una nuova sezione di testo per una pagina web esistente, basandoti su un'istruzione specifica.
+        
+        ISTRUZIONE DI CONTENUTO: "${enhancement_title}"
+        
+        CONTESTO:
+        - Query di Opportunità (da GSC, con alte impressioni e basso CTR) da integrare NATURALMENTE nel testo: 
+          ${opportunity_queries.map(q => `"${q.query}"`).join(', ')}
+        - Contenuto Esistente della Pagina (per capire tono di voce e contesto):
+          """
+          ${page_content.substring(0, 5000)} 
+          """
+
+        REGOLE DI SCRITTURA:
+        1.  STILE: Scrivi in modo umano, chiaro e coinvolgente. Evita il keyword stuffing.
+        2.  LUNGHEZZA: Il testo generato deve essere di circa 150-250 parole.
+        3.  OTTIMIZZAZIONE: Integra le "Query di Opportunità" e i loro concetti correlati nel testo in modo fluido e logico, senza forzature.
+        4.  FORMATTAZIONE: Restituisci il testo in formato HTML pulito, usando tag come <p>, <strong>, <ul>, e <li> per una buona leggibilità. Non includere tag <html> o <body>.
+        5.  FOCUS: Concentrati esclusivamente sulla creazione del nuovo contenuto richiesto dall'istruzione. Non riassumere o commentare il contenuto esistente.
+    `;
+    const generationSchema = {
+        type: Type.OBJECT,
+        properties: {
+            generated_html: { type: Type.STRING, description: "Il contenuto HTML generato, pronto per essere inserito nella pagina." }
+        },
+        required: ["generated_html"]
+    };
+
+    const result = await generateContentWithRetry(ai, {
+        model: "gemini-2.5-flash",
+        contents: generationPrompt,
+        config: { responseMimeType: "application/json", responseSchema: generationSchema, seed: 42 }
+    });
+
+    if (!result.text) {
+        throw new Error("AI Semantic Copywriter failed to generate content.");
+    }
+
+    return JSON.parse(result.text.trim());
+}
+
 
 export async function progressAnalysisFlow(options: {
   previousReport: Report;

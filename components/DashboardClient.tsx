@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion, StrategicContext, BridgeArticleSuggestion, PageDiagnostic } from '../types';
+import { Suggestion, Report, GscDataRow, SavedReport, ProgressReport, DeepAnalysisReport, Ga4DataRow, ThematicCluster, PillarRoadmap, ContentGapSuggestion, StrategicContext, BridgeArticleSuggestion, PageDiagnostic, ContentEnhancementSuggestion } from '../types';
 import { JsonModal } from './JsonModal';
 import { ModificationModal } from './ModificationModal';
 import { LoadingSpinnerIcon, XCircleIcon } from './Icons';
@@ -288,6 +288,31 @@ export default function DashboardClient() {
     }
   }, [selectedDeepAnalysisUrl, report]);
   
+    const handleGenerateContent = useCallback(async (suggestion: ContentEnhancementSuggestion): Promise<string | null> => {
+        if (!deepAnalysisReport) return null;
+
+        try {
+            const response = await fetch('/api/generate-content', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    enhancement_title: suggestion.suggestion_title,
+                    page_url: deepAnalysisReport.analyzed_url,
+                    opportunity_queries: deepAnalysisReport.opportunity_queries || []
+                })
+            });
+            if (!response.ok) {
+                 const errorData = await response.json().catch(() => ({ details: 'Server returned an error' }));
+                 throw new Error(errorData.details || `Error: ${response.status}`);
+            }
+            const data = await response.json();
+            return data.generated_html || null;
+        } catch (error) {
+            console.error("Content generation failed:", error);
+            return null;
+        }
+    }, [deepAnalysisReport]);
+
   const handleProgressCheck = useCallback(async () => {
     if (!savedReport) {
         setProgressError("Nessun report precedente trovato per il confronto.");
@@ -613,6 +638,7 @@ export default function DashboardClient() {
                         isDeepLoading={isDeepLoading}
                         deepError={deepError}
                         deepAnalysisReport={deepAnalysisReport}
+                        onGenerateContent={handleGenerateContent}
                         filters={filters}
                         onFiltersChange={setFilters}
                         onGenerateTopicalAuthority={handleGenerateTopicalAuthority}

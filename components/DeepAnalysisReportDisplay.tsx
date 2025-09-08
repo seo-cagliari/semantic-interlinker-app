@@ -1,10 +1,11 @@
 
-import React from 'react';
-import { DeepAnalysisReport, ActionStep } from '../types';
-import { ArrowDownLeftIcon, ArrowUpRightIcon, SparklesIcon, ChartBarIcon, BrainCircuitIcon, CheckCircleIcon } from './Icons';
+import React, { useState, useCallback } from 'react';
+import { DeepAnalysisReport, ActionStep, ContentEnhancementSuggestion } from '../types';
+import { ArrowDownLeftIcon, ArrowUpRightIcon, SparklesIcon, ChartBarIcon, BrainCircuitIcon, CheckCircleIcon, LoadingSpinnerIcon, ClipboardIcon, XCircleIcon } from './Icons';
 
 interface DeepAnalysisReportDisplayProps {
   report: DeepAnalysisReport;
+  onGenerateContent: (suggestion: ContentEnhancementSuggestion) => Promise<string | null>;
 }
 
 interface PriorityIndicatorProps {
@@ -40,9 +41,68 @@ const PriorityIndicator = (props: PriorityIndicatorProps) => {
     );
 };
 
+const ContentEnhancementItem = ({ suggestion, onGenerate }: { suggestion: ContentEnhancementSuggestion, onGenerate: (suggestion: ContentEnhancementSuggestion) => Promise<string | null> }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const handleGenerate = async () => {
+        setIsLoading(true);
+        setError(null);
+        setGeneratedHtml(null);
+        const result = await onGenerate(suggestion);
+        if (result) {
+            setGeneratedHtml(result);
+        } else {
+            setError("Generazione del testo fallita. Riprova.");
+        }
+        setIsLoading(false);
+    };
+    
+    const handleCopy = () => {
+        if(generatedHtml){
+            navigator.clipboard.writeText(generatedHtml).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            });
+        }
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm transition-all">
+            <h4 className="font-semibold text-slate-800">{suggestion.suggestion_title}</h4>
+            <p className="text-sm text-slate-600 mt-1">{suggestion.description}</p>
+            <div className="mt-3">
+                <button 
+                    onClick={handleGenerate} 
+                    disabled={isLoading}
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto text-sm px-4 py-2 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-700 transition-colors disabled:bg-slate-500"
+                >
+                    {isLoading ? <LoadingSpinnerIcon className="w-4 h-4" /> : <SparklesIcon className="w-4 h-4" />}
+                    {isLoading ? 'Generazione...' : 'Genera Testo con AI'}
+                </button>
+            </div>
+            {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+            {generatedHtml && (
+                <div className="mt-4 border-t border-slate-200 pt-3 animate-fade-in-up">
+                    <div className="prose prose-sm max-w-none p-3 bg-slate-50 rounded-md border border-slate-200" dangerouslySetInnerHTML={{ __html: generatedHtml }} />
+                    <button 
+                        onClick={handleCopy}
+                        className={`mt-2 flex items-center justify-center gap-2 w-full sm:w-auto text-xs px-3 py-1.5 rounded-md border font-semibold transition-colors ${ copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'}`}
+                    >
+                         {copied ? <CheckCircleIcon className="w-4 h-4" /> : <ClipboardIcon className="w-4 h-4" />}
+                         {copied ? 'Copiato!' : 'Copia HTML'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 export const DeepAnalysisReportDisplay = (props: DeepAnalysisReportDisplayProps) => {
-  const { report } = props;
+  const { report, onGenerateContent } = props;
   const score = report.authority_score;
   const scoreColorClass = score > 7 ? 'text-green-700 bg-green-100 border-green-200' : score > 4 ? 'text-yellow-700 bg-yellow-100 border-yellow-200' : 'text-slate-700 bg-slate-100 border-slate-200';
 
@@ -119,9 +179,14 @@ export const DeepAnalysisReportDisplay = (props: DeepAnalysisReportDisplayProps)
           <div className="space-y-4">
             {(report.inbound_links || []).map((link, index) => (
               <div key={index} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                <p className="text-sm text-slate-500 mb-2">
-                  DA: <a href={link.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{link.source_url}</a>
-                </p>
+                <div className="flex justify-between items-start">
+                    <p className="text-sm text-slate-500 mb-2 flex-grow">
+                      DA: <a href={link.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{link.source_url}</a>
+                    </p>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${ link.source_authority_score > 7 ? 'text-green-700 bg-green-100 border-green-200' : link.source_authority_score > 4 ? 'text-yellow-700 bg-yellow-100 border-yellow-200' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
+                        {link.source_authority_score.toFixed(1)}
+                    </span>
+                </div>
                 <p className="font-semibold text-slate-800">Anchor: <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{link.proposed_anchor}</span></p>
                 {link.driving_query && (
                     <p className="text-xs text-slate-500 mt-2">
@@ -165,10 +230,7 @@ export const DeepAnalysisReportDisplay = (props: DeepAnalysisReportDisplayProps)
           <p className="text-sm text-slate-500">Suggerimenti per arricchire il testo di <span className="font-semibold">questa pagina</span> e aumentarne la completezza.</p>
           <div className="space-y-4">
             {(report.content_enhancements || []).map((enhancement, index) => (
-              <div key={index} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                <h4 className="font-semibold text-slate-800">{enhancement.suggestion_title}</h4>
-                <p className="text-sm text-slate-600 mt-1">{enhancement.description}</p>
-              </div>
+                <ContentEnhancementItem key={index} suggestion={enhancement} onGenerate={onGenerateContent} />
             ))}
              {(!report.content_enhancements || report.content_enhancements.length === 0) && <p className="text-sm text-slate-400 italic">Nessun suggerimento per migliorare il contenuto trovato.</p>}
           </div>

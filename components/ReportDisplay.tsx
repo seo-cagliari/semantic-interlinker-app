@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion, StrategicContext } from '../types';
+import { Report, DeepAnalysisReport, PageDiagnostic, SavedReport, Suggestion, StrategicContext, ContentEnhancementSuggestion } from '../types';
 import VisualizerView from './VisualizerView';
 import { ReportView } from './ReportView';
 import { DocumentTextIcon, RectangleGroupIcon, ArrowPathIcon, ClockIcon, LoadingSpinnerIcon, LinkIcon, LightBulbIcon, BeakerIcon, LayoutDashboardIcon, XCircleIcon, BrainCircuitIcon, MapIcon } from './Icons';
@@ -32,6 +32,7 @@ interface ReportDisplayProps {
   isDeepLoading: boolean;
   deepError: string | null;
   deepAnalysisReport: DeepAnalysisReport | null;
+  onGenerateContent: (suggestion: ContentEnhancementSuggestion) => Promise<string | null>;
   filters: Filters;
   onFiltersChange: (newFilters: Filters) => void;
   onGenerateTopicalAuthority: (context: StrategicContext) => void;
@@ -60,6 +61,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
       isDeepLoading,
       deepError,
       deepAnalysisReport,
+      onGenerateContent,
       onGenerateTopicalAuthority,
       onReplicateTopicalAuthority,
       isTopicalAuthorityLoading,
@@ -119,7 +121,7 @@ export const ReportDisplay = (props: ReportDisplayProps) => {
               </div>
           )}
 
-          {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} />}
+          {deepAnalysisReport && <DeepAnalysisReportDisplay report={deepAnalysisReport} onGenerateContent={onGenerateContent} />}
       </div>
   );
 
